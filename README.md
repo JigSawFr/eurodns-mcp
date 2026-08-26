@@ -9,7 +9,7 @@ domains, DNS zones, contacts, subscriptions, SSL, invoices and orders.
 
 [![CI](https://github.com/JigSawFr/eurodns-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/JigSawFr/eurodns-mcp/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Node](https://img.shields.io/badge/node-%E2%89%A520-brightgreen.svg)](package.json)
+[![Node](https://img.shields.io/badge/node-%E2%89%A522-brightgreen.svg)](package.json)
 [![MCP](https://img.shields.io/badge/MCP-2025--11--25-8A63D2.svg)](https://modelcontextprotocol.io/specification/2025-11-25)
 
 </div>
@@ -66,7 +66,8 @@ authenticates every caller with one shared key and cannot attribute anything its
 
 ## Requirements
 
-- Node.js 20 or newer.
+- Node.js 22 or newer. Node 20 reached end of life on 30 April 2026 and receives no
+  security patches; the container image runs Node 24, the active LTS.
 - EuroDNS API credentials: an **Application ID** and an **API key**, created in the EuroDNS
   dashboard under API access.
 - **The public IP of the machine running this server must be allowlisted** in the same

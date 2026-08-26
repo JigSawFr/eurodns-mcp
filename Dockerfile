@@ -3,7 +3,7 @@
 # The image serves the HTTP transport. stdio is for clients that spawn the process
 # themselves, which is precisely what a container does not do.
 
-FROM node:22-slim AS build
+FROM node:24-slim AS build
 WORKDIR /app
 
 # --ignore-scripts matters here: the `prepare` script builds the project, and it would run
@@ -17,7 +17,7 @@ COPY scripts ./scripts
 COPY src ./src
 RUN npm run build
 
-FROM node:22-slim AS runtime
+FROM node:24-slim AS runtime
 
 LABEL org.opencontainers.image.source="https://github.com/JigSawFr/eurodns-mcp"
 LABEL org.opencontainers.image.description="Model Context Protocol server for the EuroDNS User API"
