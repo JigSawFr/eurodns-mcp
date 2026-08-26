@@ -121,8 +121,14 @@ export async function createApp(
   options: AppOptions = {},
 ): Promise<express.Express> {
   const app = express();
-  app.use(express.json({ limit: '4mb' }));
+
+  // Nothing gains from announcing the framework and version to an unauthenticated caller.
+  app.disable('x-powered-by');
+
+  // The origin check runs before the body parser, not after: rejecting a cross-origin
+  // request should not first require parsing the document it carries.
   app.use(originGuard(config.http.allowedOrigins));
+  app.use(express.json({ limit: config.http.maxBodyBytes }));
   await buildAuthLayer(app, config, options);
 
   app.post(MCP_ENDPOINT, async (req: Request, res: Response) => {
@@ -147,8 +153,11 @@ export async function createApp(
     await transport.handleRequest(req, res, req.body);
   });
 
+  // Liveness only. The endpoint is deliberately unauthenticated so a platform health check
+  // can reach it, which is also why it names no version: that would hand an unauthenticated
+  // caller the exact build to look up. Clients read the version from the MCP handshake.
   app.get('/healthz', (_req, res) => {
-    res.json({ status: 'ok', server: SERVER_NAME, version: SERVER_VERSION });
+    res.json({ status: 'ok' });
   });
 
   return app;

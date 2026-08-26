@@ -13,6 +13,45 @@ export const DEFAULT_TIMEOUT_MS = 30_000;
 export const DEFAULT_MAX_RETRIES = 2;
 
 /**
+ * Signature algorithms accepted for OAuth access tokens.
+ *
+ * Asymmetric only, and stated explicitly rather than left to the key set. A resource server
+ * that accepts whatever the token declares is the classic algorithm-confusion target: the
+ * library already refuses `none` and rejects an HMAC signature against an RSA key, but the
+ * list is what makes the guarantee readable rather than inherited.
+ */
+export const DEFAULT_JWT_ALGORITHMS = [
+  'RS256',
+  'RS384',
+  'RS512',
+  'PS256',
+  'PS384',
+  'PS512',
+  'ES256',
+  'ES384',
+  'ES512',
+  'EdDSA',
+] as const;
+
+/**
+ * Size at which the audit log is rotated to `<file>.1`, replacing any previous rotation.
+ *
+ * The log only grows, and it is the one file a deployment cannot afford to lose to a full
+ * disk. Two generations bound the footprint at twice this value; the history query reads
+ * across both, so rotating does not create a hole in what can be answered.
+ */
+export const DEFAULT_AUDIT_MAX_BYTES = 64 * 1024 * 1024;
+
+/**
+ * Largest JSON request body accepted over HTTP.
+ *
+ * Body parsing happens before authentication — an unauthenticated caller should not be able
+ * to hand the process an arbitrarily large document to parse. A DNS zone with a thousand
+ * records serialises well under this.
+ */
+export const DEFAULT_MAX_BODY_BYTES = 1024 * 1024;
+
+/**
  * TTL values accepted by the API. The `DnsRecord.ttl` description enumerates these
  * exactly; anything else is rejected upstream with an opaque error, so we validate here.
  */
