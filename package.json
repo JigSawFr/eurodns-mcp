@@ -2,16 +2,37 @@
   "name": "eurodns-mcp-server",
   "version": "0.1.0",
   "description": "Model Context Protocol server for the EuroDNS User API — domains, DNS zones, subscriptions and SSL.",
-  "keywords": ["mcp", "model-context-protocol", "eurodns", "dns", "domains", "registrar"],
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "eurodns",
+    "dns",
+    "domains",
+    "registrar"
+  ],
   "license": "MIT",
-  "repository": { "type": "git", "url": "git+https://github.com/JigSawFr/eurodns-mcp.git" },
-  "bugs": { "url": "https://github.com/JigSawFr/eurodns-mcp/issues" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/JigSawFr/eurodns-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/JigSawFr/eurodns-mcp/issues"
+  },
   "homepage": "https://github.com/JigSawFr/eurodns-mcp#readme",
   "type": "module",
-  "engines": { "node": ">=20" },
-  "bin": { "eurodns-mcp": "dist/index.js" },
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "eurodns-mcp": "dist/index.js"
+  },
   "main": "dist/index.js",
-  "files": ["dist", "spec/openapi.json", "README.md", "LICENSE"],
+  "files": [
+    "dist",
+    "spec/openapi.json",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "gen": "tsx scripts/gen-operations.ts",
     "build": "npm run gen && tsc -p tsconfig.json",
