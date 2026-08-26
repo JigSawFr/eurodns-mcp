@@ -43,8 +43,17 @@ const outputShape = {
   data: z.unknown().describe('Response body as returned by the API.'),
 } satisfies ZodRawShape;
 
+/**
+ * A shape being assembled.
+ *
+ * `ZodRawShape` is readonly from zod 4 on, so it describes a finished shape rather than one
+ * under construction. Building in a mutable map and returning it as `ZodRawShape` keeps the
+ * published type honest without fighting the library.
+ */
+type MutableShape = { -readonly [K in keyof ZodRawShape]: ZodRawShape[K] };
+
 function parameterShape(params: GeneratedParameter[]): ZodRawShape {
-  const shape: ZodRawShape = {};
+  const shape: MutableShape = {};
   for (const param of params) {
     const described = param.description ? param.schema.describe(param.description) : param.schema;
     shape[toCamelCase(param.name)] = param.required ? described : described.optional();
@@ -53,7 +62,7 @@ function parameterShape(params: GeneratedParameter[]): ZodRawShape {
 }
 
 export function buildInputShape(operation: GeneratedOperation): ZodRawShape {
-  const shape: ZodRawShape = {
+  const shape: MutableShape = {
     ...parameterShape(operation.pathParams),
     ...parameterShape(operation.queryParams),
     ...parameterShape(operation.headerParams),
