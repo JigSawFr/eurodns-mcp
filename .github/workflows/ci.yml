@@ -86,11 +86,14 @@ jobs:
       - name: Start the container
         run: |
           TOKEN=$(openssl rand -hex 32)
+          METRICS_TOKEN=$(openssl rand -hex 32)
           # Without the mask, the value is printed in plain text in every later step's
           # env block. It is a throwaway secret for a container this job destroys, but
           # these logs are public and the habit is the thing worth keeping.
           echo "::add-mask::$TOKEN"
+          echo "::add-mask::$METRICS_TOKEN"
           echo "TOKEN=$TOKEN" >> "$GITHUB_ENV"
+          echo "METRICS_TOKEN=$METRICS_TOKEN" >> "$GITHUB_ENV"
           docker volume create ci-audit
           # The runtime hardening the compose file applies, asserted here rather than
           # trusted: a read-only root filesystem with no capabilities and no privilege
@@ -106,6 +109,7 @@ jobs:
             -e EURODNS_AUDIT_DESTINATION=file \
             -e EURODNS_AUDIT_FILE=/data/audit.jsonl \
             -e EURODNS_AUDIT_QUERY=all \
+            -e EURODNS_METRICS_TOKEN="$METRICS_TOKEN" \
             -v ci-audit:/data \
             eurodns-mcp:ci
 
@@ -174,6 +178,43 @@ jobs:
           mode=$(docker exec mcp stat -c '%a' /data/audit.jsonl)
           echo "mode: $mode"
           [ "$mode" = "600" ] || { echo "::error::expected mode 600, got $mode"; exit 1; }
+
+      # The chain has to survive the transport rebuilding its server on every request, which
+      # is exactly what a unit test cannot show. Each of the calls above went through its own
+      # server instance; if the chain restarted with them, more than one line would carry a
+      # null `prev`.
+      - name: The hash chain spans requests, and a forged line is caught
+        run: |
+          docker exec mcp node -e '
+            const fs = require("fs"), crypto = require("crypto");
+            const lines = fs.readFileSync("/data/audit.jsonl", "utf8").split("\n").filter(Boolean);
+            const parsed = lines.map((l) => JSON.parse(l));
+            const genesis = parsed.filter((e) => e.prev === null).length;
+            if (genesis !== 1) throw new Error(`expected one chain start, got ${genesis}`);
+            parsed.forEach((e, i) => {
+              if (e.seq !== i + 1) throw new Error(`seq ${e.seq} at position ${i + 1}`);
+              if (i === 0) return;
+              const want = crypto.createHash("sha256").update(lines[i - 1], "utf8").digest("hex");
+              if (e.prev !== want) throw new Error(`chain broken at seq ${e.seq}`);
+            });
+            console.log(`chain intact over ${lines.length} lines`);
+          '
+
+      - name: Metrics need their own token, and carry no domain
+        run: |
+          code=$(curl -s -o /dev/null -w '%{http_code}' localhost:3000/metrics)
+          [ "$code" = "401" ] || { echo "::error::unauthenticated /metrics gave $code"; exit 1; }
+
+          # The MCP credential must not open the metrics endpoint, nor the reverse.
+          code=$(curl -s -o /dev/null -w '%{http_code}' localhost:3000/metrics \
+            -H "Authorization: Bearer $TOKEN")
+          [ "$code" = "401" ] || { echo "::error::the MCP token opened /metrics ($code)"; exit 1; }
+
+          body=$(curl -fsS localhost:3000/metrics -H "Authorization: Bearer $METRICS_TOKEN")
+          echo "$body" | grep -E 'eurodns_mcp_tool_calls_total|eurodns_mcp_tools_registered'
+          if echo "$body" | grep -qi 'test-api-key\|static-token'; then
+            echo "::error::/metrics must not carry a credential or an actor"; exit 1
+          fi
 
       - name: Container logs
         if: always()
