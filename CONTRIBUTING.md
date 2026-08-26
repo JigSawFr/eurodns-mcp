@@ -45,6 +45,11 @@ that produces a minor bump, not a major one.
 **The pull request title is checked in CI**, because with a squash merge it becomes the
 commit subject — which is the only thing release-please reads.
 
+**Merge with a squash, never a merge commit.** GitHub copies the pull request title into the
+body of a merge commit, where release-please reads it as a second Conventional Commit subject
+and lists the change twice — once for the branch commit, once for the merge. One squashed
+commit per pull request is one changelog entry.
+
 ## What CI enforces
 
 | Check                           | Why it is there                                                                      |
