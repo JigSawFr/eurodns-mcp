@@ -30,9 +30,15 @@ function calledTools(body: unknown): string[] {
  */
 export function scopeGate(requirements: Map<string, ToolRequirement>) {
   return (req: Request, res: Response, next: NextFunction): void => {
+    // The gate is only mounted behind requireBearerAuth, so an absent identity here means
+    // the middleware chain was reordered or bypassed. Refuse rather than wave it through:
+    // a scope gate that opens when it cannot see who is calling protects nothing.
     const granted = req.auth?.scopes;
     if (!granted) {
-      next();
+      res.status(403).json({
+        error: 'insufficient_scope',
+        error_description: 'No verified identity is attached to this request.',
+      });
       return;
     }
 

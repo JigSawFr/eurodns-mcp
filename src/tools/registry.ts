@@ -111,7 +111,14 @@ function auditParams(args: Record<string, unknown>): Record<string, unknown> {
 
 /** Turns the request's auth info into an actor and, where present, a scope list. */
 export function identityFrom(context: ToolContext, authInfo?: AuthInfo): CallerIdentity {
-  if (!authInfo) return { actor: context.fallbackActor };
+  if (!authInfo) {
+    // Undefined scopes mean "this transport carries no identity to check against", which is
+    // the contract on stdio and behind a static token. Under OAuth it would mean the reverse
+    // — an identity that should exist and does not — so grant nothing instead of everything.
+    return context.requireScopes
+      ? { actor: context.fallbackActor, scopes: [] }
+      : { actor: context.fallbackActor };
+  }
 
   const extra = (authInfo.extra ?? {}) as Record<string, unknown>;
   const subject = typeof extra.subject === 'string' ? extra.subject : authInfo.clientId;

@@ -249,7 +249,9 @@ describe('eurodns_dns_diff_zone', () => {
     });
 
     const structured = (
-      result as { structuredContent: { added: unknown[]; updated: unknown[]; unchanged: number } }
+      result as unknown as {
+        structuredContent: { added: unknown[]; updated: unknown[]; unchanged: number };
+      }
     ).structuredContent;
     expect(structured.unchanged).toBe(1);
     expect(structured.added).toHaveLength(1);

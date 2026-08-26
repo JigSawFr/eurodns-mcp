@@ -1,0 +1,49 @@
+name: CodeQL
+
+# Static analysis on the pull request that introduces a problem, plus a weekly run so that
+# a newly published query finds old code rather than waiting for someone to touch it.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Thursday morning: a finding lands with a working day left to act on it.
+    - cron: '17 6 * * 4'
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    # Code scanning is free on public repositories and requires GitHub Advanced Security on
+    # private ones. While this repository is private the upload fails with "Code scanning is
+    # not enabled for this repository" *after* a full successful scan, which is a red check
+    # that says nothing about the code. Gating on visibility keeps the workflow committed and
+    # correct, and it starts working by itself the day the repository is made public.
+    #
+    # `github.event.repository` is populated for schedule as well as push and pull_request,
+    # so the weekly run is gated the same way rather than being the one that still fails.
+    if: github.event.repository.visibility == 'public'
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+      # The action reads its own workflow run to attach the analysis to the right commit.
+      # Without it the scan completes and then fails on the upload with
+      # "Resource not accessible by integration" against the workflow-runs endpoint —
+      # which the restrictive default at the top of this file makes reachable.
+      actions: read
+
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - uses: github/codeql-action/init@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4
+        with:
+          languages: javascript-typescript
+          # The default suite is quiet by design. This server parses tokens and builds
+          # upstream URLs from tool arguments, so the extra taint queries earn their noise.
+          queries: security-extended
+
+      - uses: github/codeql-action/analyze@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4

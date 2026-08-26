@@ -1,7 +1,10 @@
 import { z } from 'zod';
 import {
+  DEFAULT_AUDIT_MAX_BYTES,
   DEFAULT_BASE_URL,
   DEFAULT_CHARACTER_LIMIT,
+  DEFAULT_JWT_ALGORITHMS,
+  DEFAULT_MAX_BODY_BYTES,
   DEFAULT_MAX_RETRIES,
   DEFAULT_TIMEOUT_MS,
 } from './constants.js';
@@ -51,6 +54,8 @@ export interface AuditConfig {
   destination: AuditDestination;
   filePath?: string;
   query: AuditQueryMode;
+  /** Size at which a file destination rotates. Ignored by the other destinations. */
+  maxBytes: number;
 }
 
 export type AuthMode = 'oauth' | 'token' | 'none';
@@ -61,6 +66,8 @@ export interface OAuthConfig {
   jwksUri?: string;
   subjectClaim: string;
   scopeClaim?: string;
+  /** Signature algorithms a token may be signed with. Never empty. */
+  algorithms: string[];
 }
 
 export interface HttpConfig {
@@ -72,6 +79,8 @@ export interface HttpConfig {
   staticToken?: string;
   staticTokenLabel: string;
   allowedOrigins: string[];
+  /** Largest JSON body accepted, in bytes. Enforced before authentication. */
+  maxBodyBytes: number;
   oauth?: OAuthConfig;
 }
 
@@ -188,6 +197,12 @@ function loadAuditConfig(env: NodeJS.ProcessEnv, transport: 'stdio' | 'http'): A
     );
   }
 
+  const maxBytes = parseOrThrow(
+    intFromEnv(DEFAULT_AUDIT_MAX_BYTES),
+    env.EURODNS_AUDIT_MAX_BYTES,
+    'EURODNS_AUDIT_MAX_BYTES',
+  );
+
   if (destination === 'file') {
     const filePath = (env.EURODNS_AUDIT_FILE || '').trim();
     if (filePath === '') {
@@ -195,10 +210,10 @@ function loadAuditConfig(env: NodeJS.ProcessEnv, transport: 'stdio' | 'http'): A
         'EURODNS_AUDIT_DESTINATION=file requires EURODNS_AUDIT_FILE to name the target file.',
       );
     }
-    return { destination, filePath, query };
+    return { destination, filePath, query, maxBytes };
   }
 
-  return { destination, query };
+  return { destination, query, maxBytes };
 }
 
 function loadHttpConfig(env: NodeJS.ProcessEnv, transport: 'stdio' | 'http'): HttpConfig {
@@ -226,6 +241,11 @@ function loadHttpConfig(env: NodeJS.ProcessEnv, transport: 'stdio' | 'http'): Ht
     authMode,
     staticTokenLabel: (env.EURODNS_MCP_TOKEN_LABEL || 'static-token').trim(),
     allowedOrigins,
+    maxBodyBytes: parseOrThrow(
+      intFromEnv(DEFAULT_MAX_BODY_BYTES),
+      env.EURODNS_MAX_BODY_BYTES,
+      'EURODNS_MAX_BODY_BYTES',
+    ),
   };
 
   if (transport !== 'http') return config;
@@ -260,12 +280,24 @@ function loadHttpConfig(env: NodeJS.ProcessEnv, transport: 'stdio' | 'http'): Ht
           'that tokens issued for another resource can be rejected.',
       );
     }
+    const algorithms = (env.EURODNS_OAUTH_ALGORITHMS || '')
+      .split(',')
+      .map((a) => a.trim())
+      .filter((a) => a !== '');
+    if (env.EURODNS_OAUTH_ALGORITHMS !== undefined && algorithms.length === 0) {
+      throw new ConfigError(
+        'EURODNS_OAUTH_ALGORITHMS is set but names no algorithm. Leave it unset to accept the ' +
+          `default asymmetric set (${DEFAULT_JWT_ALGORITHMS.join(', ')}), or name at least one.`,
+      );
+    }
+
     config.oauth = {
       issuer,
       audience,
       jwksUri: (env.EURODNS_OAUTH_JWKS_URI || '').trim() || undefined,
       subjectClaim: (env.EURODNS_OAUTH_SUBJECT_CLAIM || 'sub').trim(),
       scopeClaim: (env.EURODNS_OAUTH_SCOPE_CLAIM || '').trim() || undefined,
+      algorithms: algorithms.length > 0 ? algorithms : [...DEFAULT_JWT_ALGORITHMS],
     };
   }
 

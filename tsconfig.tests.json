@@ -1,0 +1,13 @@
+// Type-checks the tests, which the build configuration deliberately excludes from its
+// output. Without this they compile only through the test runner's transform, which strips
+// types without checking them — so a test could construct a stale shape and still pass,
+// hiding the fact that production code had moved on.
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "."
+  },
+  "include": ["src/**/*.ts", "tests/**/*.ts", "scripts/**/*.ts"],
+  "exclude": ["node_modules", "dist"]
+}

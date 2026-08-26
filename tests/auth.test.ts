@@ -1,20 +1,21 @@
 import { describe, expect, it, beforeAll } from 'vitest';
-import { SignJWT, exportJWK, generateKeyPair, type JWK, type KeyLike } from 'jose';
+import { SignJWT, exportJWK, generateKeyPair, type JWK } from 'jose';
 import { createLocalJWKSet } from 'jose';
 import { ConfigError, loadConfig, type Config } from '../src/config.js';
 import { JwtTokenVerifier, StaticTokenVerifier, scopesFrom } from '../src/auth/verifier.js';
 import { discoveryCandidates } from '../src/auth/discovery.js';
-import { ALL_SCOPES, SCOPES } from '../src/constants.js';
+import { ALL_SCOPES, DEFAULT_JWT_ALGORITHMS, SCOPES } from '../src/constants.js';
 
 const ISSUER = 'https://issuer.example.com';
 const AUDIENCE = 'https://mcp.example.com/mcp';
 
-let privateKey: KeyLike;
+// jose no longer exports a key type; take it from the generator so it tracks the library.
+let privateKey: Awaited<ReturnType<typeof generateKeyPair>>['privateKey'];
 let publicJwk: JWK;
 
 beforeAll(async () => {
   const pair = await generateKeyPair('RS256');
-  privateKey = pair.privateKey as KeyLike;
+  privateKey = pair.privateKey;
   publicJwk = await exportJWK(pair.publicKey);
   publicJwk.kid = 'test-key';
   publicJwk.alg = 'RS256';
@@ -35,9 +36,17 @@ async function mintToken(claims: Record<string, unknown> = {}, audience = AUDIEN
     .sign(privateKey);
 }
 
-function verifier(overrides: Partial<{ subjectClaim: string; scopeClaim: string }> = {}) {
+function verifier(
+  overrides: Partial<{ subjectClaim: string; scopeClaim: string; algorithms: string[] }> = {},
+) {
   return new JwtTokenVerifier(
-    { issuer: ISSUER, audience: AUDIENCE, subjectClaim: 'sub', ...overrides },
+    {
+      issuer: ISSUER,
+      audience: AUDIENCE,
+      subjectClaim: 'sub',
+      algorithms: [...DEFAULT_JWT_ALGORITHMS],
+      ...overrides,
+    },
     'https://unused.example.com/jwks',
     localKeys(),
   );
@@ -87,9 +96,29 @@ describe('JWT verification', () => {
       .setIssuer(ISSUER)
       .setAudience(AUDIENCE)
       .setExpirationTime('5m')
-      .sign(other.privateKey as KeyLike);
+      .sign(other.privateKey);
 
     await expect(verifier().verifyAccessToken(token)).rejects.toThrow();
+  });
+
+  it('rejects a token signed with an algorithm the server does not accept', async () => {
+    // The server pins ES256 only; the token is a genuine RS256 token from the right issuer
+    // for the right audience, signed by a key the JWKS publishes. Only the algorithm is
+    // wrong, and that alone must be enough to refuse it.
+    await expect(
+      verifier({ algorithms: ['ES256'] }).verifyAccessToken(await mintToken()),
+    ).rejects.toThrow();
+
+    await expect(
+      verifier({ algorithms: ['RS256'] }).verifyAccessToken(await mintToken()),
+    ).resolves.toBeTruthy();
+  });
+
+  it('accepts no symmetric algorithm by default', () => {
+    // An HMAC algorithm in the accepted set is what lets a leaked public key be replayed as
+    // a signing secret. The default list must contain none.
+    expect([...DEFAULT_JWT_ALGORITHMS].some((alg) => alg.startsWith('HS'))).toBe(false);
+    expect([...DEFAULT_JWT_ALGORITHMS]).toContain('RS256');
   });
 
   it('reads scopes from whichever claim the authorization server uses', () => {

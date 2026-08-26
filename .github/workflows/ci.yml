@@ -5,6 +5,15 @@ on:
     branches: ['**']
   pull_request:
 
+# Least privilege by default. A job that needs more says so itself, and nothing here needs
+# write access to the repository.
+permissions:
+  contents: read
+
+# Third-party actions are pinned to a commit rather than a tag: a tag can be moved to point
+# at different code without any change here. The version each pin corresponds to is in the
+# trailing comment, and Dependabot keeps both in step.
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -12,8 +21,8 @@ jobs:
       matrix:
         node: ['20', '22']
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: ${{ matrix.node }}
           cache: npm
@@ -24,7 +33,10 @@ jobs:
       - run: npm run gen
       - name: Generated sources must be up to date
         run: git diff --exit-code -- src/generated
-      - run: npx tsc -p tsconfig.json
+      # Covers the tests as well as the sources. The build configuration excludes tests from
+      # its output, so without this they are only ever stripped of types, never checked —
+      # and a test can then keep asserting against a shape production no longer has.
+      - run: npm run typecheck
       - run: npm run lint
       - run: npm run format:check
       - run: npm test
@@ -39,7 +51,7 @@ jobs:
     permissions:
       pull-requests: read
     steps:
-      - uses: amannn/action-semantic-pull-request@v5
+      - uses: amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50 # v6
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -48,10 +60,10 @@ jobs:
   docker:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
           push: false
@@ -75,12 +87,19 @@ jobs:
         run: |
           TOKEN=$(openssl rand -hex 32)
           # Without the mask, the value is printed in plain text in every later step's
-          # env block. It is a throwaway secret for a container this job destroys, but
-          # these logs are public and the habit is the thing worth keeping.
+          # env block. It is a throwaway secret for a container this job destroys, and this
+          # repository is private today — but it is meant to be published, and a habit that
+          # only holds while nobody is looking is not one.
           echo "::add-mask::$TOKEN"
           echo "TOKEN=$TOKEN" >> "$GITHUB_ENV"
           docker volume create ci-audit
+          # The runtime hardening the compose file applies, asserted here rather than
+          # trusted: a read-only root filesystem with no capabilities and no privilege
+          # escalation is what the deployment documentation tells operators to run.
           docker run -d --name mcp -p 3000:3000 \
+            --read-only --tmpfs /tmp \
+            --cap-drop ALL \
+            --security-opt no-new-privileges:true \
             -e EURODNS_APP_ID=test-app-id \
             -e EURODNS_API_KEY=test-api-key \
             -e EURODNS_MCP_AUTH=token \
@@ -102,6 +121,19 @@ jobs:
           echo "::error::the container never became healthy"
           docker logs mcp
           exit 1
+
+      # Written with `if` rather than `cmd && { fail; }`: under `set -e` a grep that finds
+      # nothing would end the step as a failure, which is the passing case here.
+      - name: Health check leaks nothing about the build
+        run: |
+          body=$(curl -fsS localhost:3000/healthz)
+          echo "$body"
+          if echo "$body" | grep -q 'version'; then
+            echo "::error::/healthz must not name the version"; exit 1
+          fi
+          if curl -fsS -D - -o /dev/null localhost:3000/healthz | grep -qi '^x-powered-by'; then
+            echo "::error::the framework banner should be off"; exit 1
+          fi
 
       - name: Reject an unauthenticated call
         run: |
@@ -137,6 +169,12 @@ jobs:
           echo "returned: first=$first second=$second"
           [ "$first" = "0" ] || { echo "::error::the log should start empty, got $first"; exit 1; }
           [ "$second" = "1" ] || { echo "::error::the first call should have been recorded, got $second"; exit 1; }
+
+      - name: Audit log is not world-readable
+        run: |
+          mode=$(docker exec mcp stat -c '%a' /data/audit.jsonl)
+          echo "mode: $mode"
+          [ "$mode" = "600" ] || { echo "::error::expected mode 600, got $mode"; exit 1; }
 
       - name: Container logs
         if: always()

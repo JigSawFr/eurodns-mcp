@@ -53,6 +53,7 @@ export function buildServer(options: BuildOptions): BuiltServer {
     client: new EuroDnsClient(options.config.upstream, options.fetchImpl),
     audit: new AuditLogger(options.config.audit),
     fallbackActor: fallbackActor(options),
+    requireScopes: options.transport === 'http' && options.config.http.authMode === 'oauth',
   };
 
   const generated = registerGeneratedTools(server, context);

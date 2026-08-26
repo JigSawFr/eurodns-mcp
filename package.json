@@ -40,6 +40,7 @@
     "build": "npm run gen && tsc -p tsconfig.json",
     "dev": "tsx src/index.ts",
     "dev:http": "tsx src/http.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.tests.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint . --max-warnings 0",

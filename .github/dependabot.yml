@@ -1,0 +1,26 @@
+# Workflow actions are pinned to commit SHAs, which is what makes a supply-chain
+# substitution visible — but a pinned action never updates on its own, security fixes
+# included. Dependabot is the other half of that trade: it moves the pin and the version
+# comment together, so the pinning stays honest instead of quietly rotting.
+
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: 'chore(deps)'
+
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: 'chore(deps)'
+      prefix-development: 'chore(deps-dev)'
+    groups:
+      # Four production dependencies against a dozen development ones. Grouping the latter
+      # keeps the review surface to what actually ships.
+      development:
+        dependency-type: development

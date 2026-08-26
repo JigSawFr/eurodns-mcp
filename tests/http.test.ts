@@ -3,15 +3,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
 import request from 'supertest';
-import {
-  SignJWT,
-  createLocalJWKSet,
-  exportJWK,
-  generateKeyPair,
-  type JWK,
-  type KeyLike,
-} from 'jose';
+import { SignJWT, createLocalJWKSet, exportJWK, generateKeyPair, type JWK } from 'jose';
 import { createApp, originGuard } from '../src/http.js';
+import { scopeGate } from '../src/auth/scopeGate.js';
+import { identityFrom, toolScopeIndex } from '../src/tools/registry.js';
 import { loadConfig, type Config } from '../src/config.js';
 import { ALL_SCOPES, AUDIT_SCOPE, SCOPES } from '../src/constants.js';
 import { stubFetch } from './harness.js';
@@ -19,12 +14,13 @@ import { stubFetch } from './harness.js';
 const ISSUER = 'https://issuer.example.com';
 const PUBLIC_URL = 'https://mcp.example.com/mcp';
 
-let privateKey: KeyLike;
+// jose no longer exports a key type; take it from the generator so it tracks the library.
+let privateKey: Awaited<ReturnType<typeof generateKeyPair>>['privateKey'];
 let publicJwk: JWK;
 
 beforeAll(async () => {
   const pair = await generateKeyPair('RS256');
-  privateKey = pair.privateKey as KeyLike;
+  privateKey = pair.privateKey;
   publicJwk = await exportJWK(pair.publicKey);
   publicJwk.kid = 'test-key';
   publicJwk.alg = 'RS256';
@@ -255,6 +251,101 @@ describe('health endpoint', () => {
     const response = await request(app).get('/healthz');
     expect(response.status).toBe(200);
     expect(response.body.status).toBe('ok');
+  });
+
+  it('tells an unauthenticated caller nothing about the build', async () => {
+    // The endpoint has to stay open for platform health checks, so it must not double as a
+    // free version banner — that is the first thing an attacker looks up.
+    const app = await createApp(httpConfig());
+    const response = await request(app).get('/healthz');
+
+    expect(response.body.version).toBeUndefined();
+    expect(response.body.server).toBeUndefined();
+    expect(Object.keys(response.body as object)).toEqual(['status']);
+  });
+});
+
+describe('exposure of the server itself', () => {
+  it('does not announce the framework', async () => {
+    const app = await createApp(httpConfig());
+    const response = await request(app).get('/healthz');
+    expect(response.headers['x-powered-by']).toBeUndefined();
+  });
+
+  it('refuses a body larger than the configured limit', async () => {
+    const app = await createApp(
+      httpConfig({ EURODNS_MCP_AUTH: 'token', EURODNS_MCP_TOKEN: 'k'.repeat(48) }),
+    );
+
+    const response = await request(app)
+      .post('/mcp')
+      .set('Content-Type', 'application/json')
+      .send(JSON.stringify({ ...listToolsBody, padding: 'x'.repeat(2 * 1024 * 1024) }));
+
+    expect(response.status).toBe(413);
+  });
+
+  it('rejects a foreign origin before parsing the body it carries', async () => {
+    // The order matters: a cross-origin caller should not get the parser to chew through a
+    // megabyte of JSON before being told no.
+    const app = await createApp(httpConfig());
+    const response = await request(app)
+      .post('/mcp')
+      .set('Origin', 'https://evil.example.com')
+      .set('Content-Type', 'application/json')
+      .send(JSON.stringify({ padding: 'x'.repeat(2 * 1024 * 1024) }));
+
+    expect(response.status).toBe(403);
+    expect(response.body.error).toBe('forbidden_origin');
+  });
+});
+
+describe('the scope gate fails closed', () => {
+  it('refuses a request that reaches it with no verified identity', () => {
+    // Only reachable if the middleware chain is reordered or the bearer check is removed.
+    // The point of the test is that such a mistake denies rather than opens everything.
+    const gate = scopeGate(toolScopeIndex());
+    let passed = false;
+    const captured: { status?: number; body?: unknown } = {};
+    const res = {
+      status(code: number) {
+        captured.status = code;
+        return this;
+      },
+      json(body: unknown) {
+        captured.body = body;
+      },
+      set() {
+        return this;
+      },
+    };
+
+    gate(
+      { auth: undefined, body: callTool('eurodns_dns_get_zone', {}) } as never,
+      res as never,
+      () => {
+        passed = true;
+      },
+    );
+
+    expect(passed).toBe(false);
+    expect(captured.status).toBe(403);
+  });
+
+  it('grants nothing when OAuth is on and no identity reached the handler', () => {
+    const context = {
+      fallbackActor: { mode: 'none' as const, subject: 'anonymous' },
+      requireScopes: true,
+    } as never;
+    // An empty grant, not an absent one: absent means "this transport has no identities",
+    // which under OAuth would skip the scope check entirely.
+    expect(identityFrom(context, undefined).scopes).toEqual([]);
+
+    const stdio = {
+      fallbackActor: { mode: 'stdio' as const, subject: 'someone' },
+      requireScopes: false,
+    } as never;
+    expect(identityFrom(stdio, undefined).scopes).toBeUndefined();
   });
 });
 

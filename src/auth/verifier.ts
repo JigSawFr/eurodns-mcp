@@ -1,5 +1,5 @@
 import { createRemoteJWKSet, jwtVerify, type JWTPayload, type JWTVerifyGetKey } from 'jose';
-import { timingSafeEqual } from 'node:crypto';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import type { OAuthTokenVerifier } from '@modelcontextprotocol/sdk/server/auth/provider.js';
 import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 import { InvalidTokenError } from '@modelcontextprotocol/sdk/server/auth/errors.js';
@@ -40,6 +40,9 @@ export class JwtTokenVerifier implements OAuthTokenVerifier {
       ({ payload } = await jwtVerify(token, this.getKey, {
         issuer: this.config.issuer,
         audience: this.config.audience,
+        // Stated rather than inherited from the key set: a resource server that accepts
+        // whatever the token declares is how algorithm confusion gets in.
+        algorithms: this.config.algorithms,
       }));
     } catch (cause) {
       throw new InvalidTokenError(
@@ -71,19 +74,23 @@ export class JwtTokenVerifier implements OAuthTokenVerifier {
  * identity of their own. Such a caller is not scope-checked: the deployment guardrails are
  * the only limit that applies to it.
  */
+function digest(value: string): Buffer {
+  return createHash('sha256').update(value, 'utf8').digest();
+}
+
 export class StaticTokenVerifier implements OAuthTokenVerifier {
   private readonly expected: Buffer;
   private readonly label: string;
 
   constructor(token: string, label: string) {
-    this.expected = Buffer.from(token, 'utf8');
+    this.expected = digest(token);
     this.label = label;
   }
 
   async verifyAccessToken(token: string): Promise<AuthInfo> {
-    const candidate = Buffer.from(token, 'utf8');
-    const matches =
-      candidate.length === this.expected.length && timingSafeEqual(candidate, this.expected);
+    // Compared as digests rather than raw bytes: timingSafeEqual requires equal lengths, so
+    // comparing directly would leak the expected length through an early return.
+    const matches = timingSafeEqual(digest(token), this.expected);
 
     if (!matches) throw new InvalidTokenError('Token rejected');
 
