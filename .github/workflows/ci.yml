@@ -17,6 +17,9 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
           cache: npm
+      # Scripts stay enabled on purpose: this exercises the `prepare` script that makes
+      # `npx github:JigSawFr/eurodns-mcp` work. It rebuilds before the explicit steps below,
+      # which costs a few seconds and is the only place that path is covered.
       - run: npm ci
       - run: npm run gen
       - name: Generated sources must be up to date
@@ -25,3 +28,116 @@ jobs:
       - run: npm run lint
       - run: npm run format:check
       - run: npm test
+
+  # release-please reads Conventional Commit subjects. A non-conforming subject produces no
+  # release and says nothing about it, so the convention is checked before it reaches main.
+  # With squash merges the PR title becomes the commit subject, which is why it is checked
+  # here rather than on individual commits.
+  pr-title:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    steps:
+      - uses: amannn/action-semantic-pull-request@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # The Dockerfile is only ever exercised here. Build for amd64 alone — the release workflow
+  # does the multi-arch build, and doubling it on every pull request buys nothing.
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: eurodns-mcp:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Refuses to listen on 0.0.0.0 without authentication
+        run: |
+          set +e
+          output=$(docker run --rm -e EURODNS_APP_ID=x -e EURODNS_API_KEY=y eurodns-mcp:ci 2>&1)
+          code=$?
+          set -e
+          echo "$output"
+          if [ "$code" -ne 78 ]; then echo "::error::expected exit 78, got $code"; exit 1; fi
+          echo "$output" | grep -q 'EURODNS_MCP_AUTH' \
+            || { echo "::error::the refusal should name the variable to set"; exit 1; }
+
+      - name: Start the container
+        run: |
+          TOKEN=$(openssl rand -hex 32)
+          # Without the mask, the value is printed in plain text in every later step's
+          # env block. It is a throwaway secret for a container this job destroys, but
+          # these logs are public and the habit is the thing worth keeping.
+          echo "::add-mask::$TOKEN"
+          echo "TOKEN=$TOKEN" >> "$GITHUB_ENV"
+          docker volume create ci-audit
+          docker run -d --name mcp -p 3000:3000 \
+            -e EURODNS_APP_ID=test-app-id \
+            -e EURODNS_API_KEY=test-api-key \
+            -e EURODNS_MCP_AUTH=token \
+            -e EURODNS_MCP_TOKEN="$TOKEN" \
+            -e EURODNS_AUDIT_DESTINATION=file \
+            -e EURODNS_AUDIT_FILE=/data/audit.jsonl \
+            -e EURODNS_AUDIT_QUERY=all \
+            -v ci-audit:/data \
+            eurodns-mcp:ci
+
+      - name: Wait for readiness
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fsS localhost:3000/healthz >/dev/null 2>&1; then
+              curl -fsS localhost:3000/healthz; echo; exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::the container never became healthy"
+          docker logs mcp
+          exit 1
+
+      - name: Reject an unauthenticated call
+        run: |
+          code=$(curl -s -o /dev/null -w '%{http_code}' -X POST localhost:3000/mcp \
+            -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}')
+          [ "$code" = "401" ] || { echo "::error::expected 401, got $code"; exit 1; }
+
+      - name: List tools with a token
+        run: |
+          count=$(curl -fsS -X POST localhost:3000/mcp \
+            -H "Authorization: Bearer $TOKEN" \
+            -H 'Content-Type: application/json' \
+            -H 'Accept: application/json, text/event-stream' \
+            -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' \
+            | python3 -c 'import json,sys; print(len(json.load(sys.stdin)["result"]["tools"]))')
+          echo "tools: $count"
+          [ "$count" -ge 80 ] || { echo "::error::expected the full tool surface, got $count"; exit 1; }
+
+      # Proves the audit log survives on the volume: the first query writes its own line and
+      # sees nothing, the second reads that line back. This is also the only tool that needs
+      # no upstream call, so it works without real EuroDNS credentials.
+      - name: Audit log persists across calls
+        run: |
+          query() {
+            curl -fsS -X POST localhost:3000/mcp \
+              -H "Authorization: Bearer $TOKEN" \
+              -H 'Content-Type: application/json' \
+              -H 'Accept: application/json, text/event-stream' \
+              -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"eurodns_audit_query","arguments":{}}}' \
+              | python3 -c 'import json,sys; print(json.load(sys.stdin)["result"]["structuredContent"]["returned"])'
+          }
+          first=$(query); second=$(query)
+          echo "returned: first=$first second=$second"
+          [ "$first" = "0" ] || { echo "::error::the log should start empty, got $first"; exit 1; }
+          [ "$second" = "1" ] || { echo "::error::the first call should have been recorded, got $second"; exit 1; }
+
+      - name: Container logs
+        if: always()
+        run: docker logs mcp || true

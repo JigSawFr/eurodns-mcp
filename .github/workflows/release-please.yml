@@ -1,0 +1,26 @@
+name: Release Please
+
+# Accumulates a release PR from Conventional Commit subjects. Merging that PR bumps the
+# version, writes CHANGELOG.md, tags, and publishes a GitHub Release — which is what the
+# image workflow triggers on.
+#
+# The failure mode to know about is silent: a commit whose subject does not follow the
+# convention contributes nothing, and no release appears. The PR-title check in ci.yml
+# exists to catch that before it reaches main.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: googleapis/release-please-action@v4
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json

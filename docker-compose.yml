@@ -1,0 +1,43 @@
+# Reference deployment for the HTTP transport.
+#
+#   cp .env.example .env   # fill in the credentials, then:
+#   docker compose up -d
+#
+# The server listens on 0.0.0.0 inside the container, which it refuses to do without
+# authentication. EURODNS_MCP_AUTH must therefore be "token" or "oauth" — starting it
+# without one exits 78 and says so.
+
+services:
+  eurodns-mcp:
+    build: .
+    # Or use a published image instead of building:
+    # image: ghcr.io/jigsawfr/eurodns-mcp:latest
+    restart: unless-stopped
+    init: true
+    ports:
+      - '127.0.0.1:3000:3000'
+    env_file:
+      - .env
+    environment:
+      HOST: 0.0.0.0
+      PORT: '3000'
+      # The history query tool only exists when the log is a file on a persistent volume.
+      EURODNS_AUDIT_DESTINATION: file
+      EURODNS_AUDIT_FILE: /data/audit.jsonl
+    volumes:
+      - audit:/data
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3000/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 3s
+      start_period: 5s
+      retries: 3
+
+volumes:
+  audit:
