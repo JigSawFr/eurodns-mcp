@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { realpathSync } from 'node:fs';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
@@ -13,6 +14,8 @@ import { ConfigError, loadConfig, type Config } from './config.js';
 import { OnePasswordError, resolveEnvSecrets } from './secrets/index.js';
 import { ALL_SCOPES } from './constants.js';
 import { SERVER_NAME, SERVER_VERSION, buildServer } from './server.js';
+import { MetricsRegistry } from './metrics.js';
+import { AuditLogger } from './audit.js';
 import { toolScopeIndex } from './tools/registry.js';
 import { scopeGate } from './auth/scopeGate.js';
 import { JwtTokenVerifier, StaticTokenVerifier } from './auth/verifier.js';
@@ -28,6 +31,8 @@ export interface AppOptions {
   discoveryFetch?: typeof fetch;
   /** Replaces the remote JWKS lookup with a local key set. */
   jwtKeyResolver?: JWTVerifyGetKey;
+  /** Supplies the process-wide counters, so a test can inspect them. */
+  metrics?: MetricsRegistry;
 }
 
 const MCP_ENDPOINT = '/mcp';
@@ -131,12 +136,20 @@ export async function createApp(
   app.use(express.json({ limit: config.http.maxBodyBytes }));
   await buildAuthLayer(app, config, options);
 
+  // One registry and one logger for the process. The server below is rebuilt on every call,
+  // so anything that has to accumulate — counters, and the audit log's hash chain — must
+  // outlive it. A logger per request would restart the chain on every call.
+  const metrics = options.metrics ?? new MetricsRegistry();
+  const audit = new AuditLogger(config.audit, Date.now, metrics);
+
   app.post(MCP_ENDPOINT, async (req: Request, res: Response) => {
     // Stateless: a fresh server and transport per request, so nothing is shared between
     // callers and the deployment scales without sticky sessions.
     const { server } = buildServer({
       config,
       transport: 'http',
+      metrics,
+      audit,
       ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
     });
     const transport = new StreamableHTTPServerTransport({
@@ -160,7 +173,57 @@ export async function createApp(
     res.json({ status: 'ok' });
   });
 
+  registerMetricsEndpoint(app, config, metrics);
+
   return app;
+}
+
+/**
+ * Serves counters in the Prometheus text format, when a token is configured.
+ *
+ * Its own secret rather than the MCP credential: the poller is a monitoring system, which
+ * should not hold a token that can also change DNS. Under OAuth the MCP credential is a
+ * short-lived JWT that no network management system could carry anyway.
+ */
+function registerMetricsEndpoint(
+  app: express.Express,
+  config: Config,
+  metrics: MetricsRegistry,
+): void {
+  const token = config.http.metricsToken;
+  if (token === undefined) return;
+
+  const expected = createHash('sha256').update(token, 'utf8').digest();
+  let toolCount: number | undefined;
+
+  app.get('/metrics', (req: Request, res: Response) => {
+    const header = req.headers.authorization ?? '';
+    const presented = header.startsWith('Bearer ') ? header.slice('Bearer '.length) : '';
+    const matches = timingSafeEqual(
+      createHash('sha256').update(presented, 'utf8').digest(),
+      expected,
+    );
+
+    if (!matches) {
+      res.set('WWW-Authenticate', 'Bearer');
+      res.status(401).json({ error: 'unauthorized' });
+      return;
+    }
+
+    // Counted once: the tool surface is fixed by configuration, and building a server to
+    // ask again on every scrape would be pure waste.
+    toolCount ??= buildServer({ config, transport: 'http' }).toolCount;
+
+    res.type('text/plain; version=0.0.4; charset=utf-8').send(
+      metrics.render({
+        version: SERVER_VERSION,
+        toolCount,
+        ...(config.audit.destination === 'file' && config.audit.filePath
+          ? { auditFile: config.audit.filePath }
+          : {}),
+      }),
+    );
+  });
 }
 
 async function main(): Promise<void> {
