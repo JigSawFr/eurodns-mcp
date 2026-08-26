@@ -74,6 +74,10 @@ jobs:
       - name: Start the container
         run: |
           TOKEN=$(openssl rand -hex 32)
+          # Without the mask, the value is printed in plain text in every later step's
+          # env block. It is a throwaway secret for a container this job destroys, but
+          # these logs are public and the habit is the thing worth keeping.
+          echo "::add-mask::$TOKEN"
           echo "TOKEN=$TOKEN" >> "$GITHUB_ENV"
           docker volume create ci-audit
           docker run -d --name mcp -p 3000:3000 \
