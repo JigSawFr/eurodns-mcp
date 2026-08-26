@@ -1,3 +1,6 @@
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
 import request from 'supertest';
 import {
@@ -10,7 +13,7 @@ import {
 } from 'jose';
 import { createApp, originGuard } from '../src/http.js';
 import { loadConfig, type Config } from '../src/config.js';
-import { ALL_SCOPES, SCOPES } from '../src/constants.js';
+import { ALL_SCOPES, AUDIT_SCOPE, SCOPES } from '../src/constants.js';
 import { stubFetch } from './harness.js';
 
 const ISSUER = 'https://issuer.example.com';
@@ -252,5 +255,51 @@ describe('health endpoint', () => {
     const response = await request(app).get('/healthz');
     expect(response.status).toBe(200);
     expect(response.body.status).toBe('ok');
+  });
+});
+
+describe('audit scope', () => {
+  const auditLog = () => {
+    const dir = mkdtempSync(join(tmpdir(), 'eurodns-http-audit-'));
+    const path = join(dir, 'audit.jsonl');
+    writeFileSync(path, '', 'utf8');
+    return path;
+  };
+
+  it('is not granted by the read scope', async () => {
+    const app = await oauthApp(
+      oauthConfig({
+        EURODNS_AUDIT_DESTINATION: 'file',
+        EURODNS_AUDIT_FILE: auditLog(),
+        EURODNS_AUDIT_QUERY: 'all',
+      }),
+    );
+
+    const response = await request(app)
+      .post('/mcp')
+      .set('Authorization', `Bearer ${await token([SCOPES.read])}`)
+      .set('Accept', 'application/json, text/event-stream')
+      .send(callTool('eurodns_audit_query', {}));
+
+    expect(response.status).toBe(403);
+    expect(response.headers['www-authenticate']).toContain(`scope="${AUDIT_SCOPE}"`);
+  });
+
+  it('lets the audit scope through', async () => {
+    const app = await oauthApp(
+      oauthConfig({
+        EURODNS_AUDIT_DESTINATION: 'file',
+        EURODNS_AUDIT_FILE: auditLog(),
+        EURODNS_AUDIT_QUERY: 'all',
+      }),
+    );
+
+    const response = await request(app)
+      .post('/mcp')
+      .set('Authorization', `Bearer ${await token([AUDIT_SCOPE])}`)
+      .set('Accept', 'application/json, text/event-stream')
+      .send(callTool('eurodns_audit_query', {}));
+
+    expect(response.status).toBe(200);
   });
 });

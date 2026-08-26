@@ -39,9 +39,18 @@ export interface GuardrailConfig {
 
 export type AuditDestination = 'stderr' | 'stdout' | 'file' | 'none';
 
+/**
+ * Who may read the audit log back through the server.
+ *
+ * `own` is the useful default once enabled: a caller sees their own history, which answers
+ * "what did I change last week" without turning every token into a way to watch colleagues.
+ */
+export type AuditQueryMode = 'off' | 'own' | 'all';
+
 export interface AuditConfig {
   destination: AuditDestination;
   filePath?: string;
+  query: AuditQueryMode;
 }
 
 export type AuthMode = 'oauth' | 'token' | 'none';
@@ -163,6 +172,22 @@ function loadAuditConfig(env: NodeJS.ProcessEnv, transport: 'stdio' | 'http'): A
     );
   }
 
+  const query = parseOrThrow(
+    z
+      .enum(['off', 'own', 'all'])
+      .optional()
+      .transform((v) => v ?? 'off'),
+    (env.EURODNS_AUDIT_QUERY || '').trim() === '' ? undefined : env.EURODNS_AUDIT_QUERY?.trim(),
+    'EURODNS_AUDIT_QUERY',
+  );
+
+  if (query !== 'off' && destination !== 'file') {
+    throw new ConfigError(
+      `EURODNS_AUDIT_QUERY=${query} requires EURODNS_AUDIT_DESTINATION=file. The log can only ` +
+        'be read back from a file — stderr and stdout are write-only streams.',
+    );
+  }
+
   if (destination === 'file') {
     const filePath = (env.EURODNS_AUDIT_FILE || '').trim();
     if (filePath === '') {
@@ -170,10 +195,10 @@ function loadAuditConfig(env: NodeJS.ProcessEnv, transport: 'stdio' | 'http'): A
         'EURODNS_AUDIT_DESTINATION=file requires EURODNS_AUDIT_FILE to name the target file.',
       );
     }
-    return { destination, filePath };
+    return { destination, filePath, query };
   }
 
-  return { destination };
+  return { destination, query };
 }
 
 function loadHttpConfig(env: NodeJS.ProcessEnv, transport: 'stdio' | 'http'): HttpConfig {

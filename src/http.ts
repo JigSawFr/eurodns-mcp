@@ -10,9 +10,10 @@ import {
 import { requireBearerAuth } from '@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js';
 import type { OAuthTokenVerifier } from '@modelcontextprotocol/sdk/server/auth/provider.js';
 import { ConfigError, loadConfig, type Config } from './config.js';
+import { OnePasswordError, resolveEnvSecrets } from './secrets/index.js';
 import { ALL_SCOPES } from './constants.js';
 import { SERVER_NAME, SERVER_VERSION, buildServer } from './server.js';
-import { toolRiskIndex } from './tools/registry.js';
+import { toolScopeIndex } from './tools/registry.js';
 import { scopeGate } from './auth/scopeGate.js';
 import { JwtTokenVerifier, StaticTokenVerifier } from './auth/verifier.js';
 import { discoverAuthorizationServer } from './auth/discovery.js';
@@ -111,7 +112,7 @@ async function buildAuthLayer(
   );
 
   if (authMode === 'oauth') {
-    app.use(MCP_ENDPOINT, scopeGate(toolRiskIndex()));
+    app.use(MCP_ENDPOINT, scopeGate(toolScopeIndex()));
   }
 }
 
@@ -154,7 +155,7 @@ export async function createApp(
 }
 
 async function main(): Promise<void> {
-  const config = loadConfig(process.env, 'http');
+  const config = loadConfig(await resolveEnvSecrets(process.env), 'http');
   const app = await createApp(config);
   const { host, port, authMode } = config.http;
 
@@ -180,7 +181,7 @@ function isEntryPoint(): boolean {
 
 if (isEntryPoint()) {
   main().catch((error: unknown) => {
-    if (error instanceof ConfigError) {
+    if (error instanceof ConfigError || error instanceof OnePasswordError) {
       process.stderr.write(`${error.message}\n`);
       process.exit(78); // EX_CONFIG
     }

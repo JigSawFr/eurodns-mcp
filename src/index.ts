@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { ConfigError, loadConfig } from './config.js';
+import { OnePasswordError, resolveEnvSecrets } from './secrets/index.js';
 import { SERVER_NAME, SERVER_VERSION, buildServer } from './server.js';
 
 /**
@@ -11,7 +12,7 @@ import { SERVER_NAME, SERVER_VERSION, buildServer } from './server.js';
  * Nothing may be written to stdout except the JSON-RPC stream.
  */
 async function main(): Promise<void> {
-  const config = loadConfig(process.env, 'stdio');
+  const config = loadConfig(await resolveEnvSecrets(process.env), 'stdio');
   const { server, toolCount } = buildServer({ config, transport: 'stdio' });
 
   const transport = new StdioServerTransport();
@@ -21,7 +22,7 @@ async function main(): Promise<void> {
 }
 
 main().catch((error: unknown) => {
-  if (error instanceof ConfigError) {
+  if (error instanceof ConfigError || error instanceof OnePasswordError) {
     process.stderr.write(`${error.message}\n`);
     process.exit(78); // EX_CONFIG
   }

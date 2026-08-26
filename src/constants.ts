@@ -74,7 +74,7 @@ export const DESTRUCTIVE_OPERATION_IDS = new Set([
   'cancelSslSan',
 ]);
 
-/** OAuth scopes this server understands, one per risk class. */
+/** OAuth scopes for the risk classes. */
 export const SCOPES = {
   read: 'eurodns.read',
   write: 'eurodns.dns.write',
@@ -82,7 +82,13 @@ export const SCOPES = {
   billing: 'eurodns.billing',
 } as const satisfies Record<RiskClass, string>;
 
-export const ALL_SCOPES = Object.values(SCOPES);
+/**
+ * Reading the audit log is a read, but not of EuroDNS data: it reveals who did what.
+ * It gets its own scope so that `eurodns.read` does not grant it by accident.
+ */
+export const AUDIT_SCOPE = 'eurodns.audit';
+
+export const ALL_SCOPES = [...Object.values(SCOPES), AUDIT_SCOPE];
 
 /** Request headers the API uses for pagination, instead of the usual query parameters. */
 export const PAGINATION_HEADERS = {
