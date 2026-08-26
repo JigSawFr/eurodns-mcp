@@ -12,6 +12,7 @@ import { formatJson, redactForAudit } from '../services/format.js';
 import { toolNameFor } from './naming.js';
 import { describeOperation } from './overrides.js';
 import type { CallerIdentity, ToolContext } from './context.js';
+import type { RiskClass } from '../constants.js';
 
 /** `domain-name` -> `domainName`, so tool arguments read like ordinary parameters. */
 export function toCamelCase(value: string): string {
@@ -120,6 +121,26 @@ export function identityFrom(context: ToolContext, authInfo?: AuthInfo): CallerI
     // A static token carries no per-user identity, so it is not scope-checked.
     scopes: mode === 'oauth' ? authInfo.scopes : undefined,
   };
+}
+
+/**
+ * Risk class of the hand-written tools, which have no generated operation to derive from.
+ */
+export const HAND_WRITTEN_TOOL_RISKS: Record<string, RiskClass> = {
+  eurodns_dns_upsert_record: 'write',
+  eurodns_dns_delete_record: 'write',
+  eurodns_dns_diff_zone: 'read',
+};
+
+/**
+ * Tool name to risk class, for callers that must decide before dispatch — the HTTP scope
+ * gate needs to know what a call requires before the tool handler ever runs.
+ */
+export function toolRiskIndex(): Map<string, RiskClass> {
+  const index = new Map<string, RiskClass>();
+  for (const operation of OPERATIONS) index.set(toolNameFor(operation), operation.risk);
+  for (const [name, risk] of Object.entries(HAND_WRITTEN_TOOL_RISKS)) index.set(name, risk);
+  return index;
 }
 
 function errorResult(message: string) {
