@@ -190,6 +190,25 @@ An SNMP agent inside the server would be the wrong place for three reasons: UDP 
 community strings travel in clear and SNMPv3 adds a third secret store; and exposing
 application metrics properly means publishing and maintaining a MIB.
 
+## Rate limiting
+
+`/mcp` is limited to `EURODNS_RATE_LIMIT` requests per `EURODNS_RATE_LIMIT_WINDOW_MS`
+(300 per minute by default), and a caller past the limit gets a JSON-RPC error rather than a
+bare HTML `429`. `/healthz` and `/metrics` are **not** limited: both are polled continuously
+by machines doing their job.
+
+Two things decide whether it works as intended.
+
+**Set `EURODNS_TRUST_PROXY` if anything sits in front of the server.** Behind a reverse
+proxy `req.ip` is the proxy's address, so the limiter becomes one shared counter for every
+caller — worse than no limiter, because it looks like protection while throttling everyone
+together. Set it to the number of proxies you actually control, never higher: trusting a hop
+you do not own lets a caller forge the address the limit is keyed on.
+
+**The store is in memory, so the count is per process.** That matches the rest of this
+deployment — the audit log is a file on one volume — but scaling out multiplies the effective
+limit by the number of instances rather than sharing it.
+
 ## Verifying a deployment
 
 ```bash

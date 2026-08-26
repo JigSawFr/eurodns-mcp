@@ -145,3 +145,13 @@ export const PAGINATION_HEADERS = {
   sortField: 'pagination-sortfield',
   sortOrder: 'pagination-sortorder',
 } as const;
+
+/**
+ * Default rate limit on the MCP endpoint: requests per window, and the window.
+ *
+ * Generous on purpose. An agent working through a zone makes a burst of calls, and a limiter
+ * that trips on ordinary use gets turned off — which leaves nothing. This absorbs a flood
+ * without being felt by anyone doing real work.
+ */
+export const DEFAULT_RATE_LIMIT = 300;
+export const DEFAULT_RATE_LIMIT_WINDOW_MS = 60_000;

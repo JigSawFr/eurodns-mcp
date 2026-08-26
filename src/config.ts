@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import {
   DEFAULT_AUDIT_MAX_BYTES,
+  DEFAULT_RATE_LIMIT,
+  DEFAULT_RATE_LIMIT_WINDOW_MS,
   DEFAULT_BASE_URL,
   DEFAULT_CHARACTER_LIMIT,
   DEFAULT_JWT_ALGORITHMS,
@@ -90,6 +92,18 @@ export interface HttpConfig {
    * configuration where it is exposed by accident.
    */
   metricsToken?: string;
+  /** Requests allowed per window on the MCP endpoint. `0` disables the limiter. */
+  rateLimit: number;
+  rateLimitWindowMs: number;
+  /**
+   * How many proxy hops to trust for the client address.
+   *
+   * Off by default, and that default is the safe one: behind a reverse proxy `req.ip` is the
+   * proxy's, so a limiter keyed on it becomes one shared counter for every caller — worse
+   * than no limiter, because it looks like protection while throttling everyone together.
+   * Set this only to the number of proxies you actually control.
+   */
+  trustProxy: number;
   oauth?: OAuthConfig;
 }
 
@@ -254,6 +268,31 @@ function loadHttpConfig(env: NodeJS.ProcessEnv, transport: 'stdio' | 'http'): Ht
       intFromEnv(DEFAULT_MAX_BODY_BYTES),
       env.EURODNS_MAX_BODY_BYTES,
       'EURODNS_MAX_BODY_BYTES',
+    ),
+    // Zero is meaningful here — it turns the limiter off — so this cannot use intFromEnv,
+    // which requires a positive integer.
+    rateLimit: parseOrThrow(
+      z
+        .string()
+        .optional()
+        .transform((v) => (v === undefined || v === '' ? DEFAULT_RATE_LIMIT : Number(v)))
+        .pipe(z.number().int().nonnegative()),
+      env.EURODNS_RATE_LIMIT,
+      'EURODNS_RATE_LIMIT',
+    ),
+    rateLimitWindowMs: parseOrThrow(
+      intFromEnv(DEFAULT_RATE_LIMIT_WINDOW_MS),
+      env.EURODNS_RATE_LIMIT_WINDOW_MS,
+      'EURODNS_RATE_LIMIT_WINDOW_MS',
+    ),
+    trustProxy: parseOrThrow(
+      z
+        .string()
+        .optional()
+        .transform((v) => (v === undefined || v === '' ? 0 : Number(v)))
+        .pipe(z.number().int().nonnegative()),
+      env.EURODNS_TRUST_PROXY,
+      'EURODNS_TRUST_PROXY',
     ),
   };
 
