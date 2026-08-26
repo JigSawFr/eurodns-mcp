@@ -14,6 +14,16 @@ services:
     # image: ghcr.io/jigsawfr/eurodns-mcp:latest
     restart: unless-stopped
     init: true
+    # The process writes to /data and nowhere else, so the root filesystem can be sealed.
+    # It binds port 3000 as an unprivileged user and never elevates, so it needs no
+    # capabilities at all — dropping them costs nothing and removes the whole class.
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     ports:
       - '127.0.0.1:3000:3000'
     env_file:

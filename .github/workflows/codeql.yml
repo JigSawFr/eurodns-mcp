@@ -1,0 +1,35 @@
+name: CodeQL
+
+# Static analysis on the pull request that introduces a problem, plus a weekly run so that
+# a newly published query finds old code rather than waiting for someone to touch it.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Thursday morning: a finding lands with a working day left to act on it.
+    - cron: '17 6 * * 4'
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - uses: github/codeql-action/init@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4
+        with:
+          languages: javascript-typescript
+          # The default suite is quiet by design. This server parses tokens and builds
+          # upstream URLs from tool arguments, so the extra taint queries earn their noise.
+          queries: security-extended
+
+      - uses: github/codeql-action/analyze@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4
