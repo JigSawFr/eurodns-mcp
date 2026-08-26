@@ -1,0 +1,33 @@
+name: Feature request
+description: Something the server should be able to do.
+labels: ['enhancement']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Worth knowing first: the 79 API tools are **generated** from the vendored OpenAPI
+        document. If an endpoint exists there and no tool reaches it, that is a bug in the
+        generator rather than a feature request — and if it does not exist there, no amount
+        of work here will add it.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What you are trying to do
+      description: The task, not the implementation. What would you ask the server, in plain language?
+    validations:
+      required: true
+
+  - type: textarea
+    id: today
+    attributes:
+      label: What happens today
+      description: Which tools you reached for, and where they fell short.
+    validations:
+      required: true
+
+  - type: textarea
+    id: shape
+    attributes:
+      label: What you had in mind
+      description: Optional. A rough shape is fine.

@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/JigSawFr/eurodns-mcp/security/advisories/new
+    about: Please report privately, never as a public issue. This opens an advisory visible only to you and the maintainers.
+  - name: Ask about the EuroDNS API itself
+    url: https://www.eurodns.com/support
+    about: This project is not affiliated with EuroDNS. Questions about the API, an account or a domain belong with the vendor.

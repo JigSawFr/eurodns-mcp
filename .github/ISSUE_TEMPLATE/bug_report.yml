@@ -1,0 +1,69 @@
+name: Bug report
+description: Something the server does that it should not, or does not do that it should.
+labels: ['bug']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please do not report a security vulnerability here — use the private advisory link on
+        the previous page. A public issue is world-readable from the moment you file it.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you asked for, and what the server did instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How to reproduce
+      description: |
+        The smallest sequence that shows it. A raw request is ideal — but note that the
+        endpoint requires `Accept: application/json, text/event-stream`; a curl probe sending
+        only `application/json` is answered `406`, and that is not the bug.
+      render: shell
+    validations:
+      required: true
+
+  - type: dropdown
+    id: transport
+    attributes:
+      label: Transport
+      options:
+        - stdio
+        - HTTP
+    validations:
+      required: true
+
+  - type: dropdown
+    id: auth
+    attributes:
+      label: EURODNS_MCP_AUTH
+      description: Several behaviours differ by mode, so this narrows it down quickly.
+      options:
+        - none
+        - token
+        - oauth
+        - not applicable (stdio)
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: A release tag, an image digest, or the commit you are running.
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant output
+      description: |
+        Audit lines or stderr, if they help. **Redact before pasting**: audit lines carry
+        actor identities and the domains a call acted on.
+      render: shell
