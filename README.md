@@ -75,19 +75,15 @@ authenticates every caller with one shared key and cannot attribute anything its
 
 ## Quick start
 
-```bash
-npx eurodns-mcp
-```
-
-with the credentials in the environment. For a client that spawns the server itself, such as
-Claude Desktop:
+The package is not on npm yet, so it installs from this repository. For a client that spawns
+the server itself, such as Claude Desktop:
 
 ```json
 {
   "mcpServers": {
     "eurodns": {
       "command": "npx",
-      "args": ["-y", "eurodns-mcp"],
+      "args": ["-y", "github:JigSawFr/eurodns-mcp"],
       "env": {
         "EURODNS_APP_ID": "your-application-id",
         "EURODNS_API_KEY": "your-api-key"
@@ -96,6 +92,15 @@ Claude Desktop:
   }
 }
 ```
+
+To try it in a terminal first:
+
+```bash
+npx -y github:JigSawFr/eurodns-mcp
+```
+
+For a shared deployment over HTTP, use the container instead — see
+[Deployment](#deployment).
 
 ## What you can ask it
 
@@ -217,7 +222,7 @@ export EURODNS_API_KEY="$(security find-generic-password -s eurodns-api-key -w)"
 # Windows (PowerShell, with the SecretManagement module):
 #   $env:EURODNS_API_KEY = Get-Secret -Name eurodns-api-key -AsPlainText
 
-exec npx -y eurodns-mcp
+exec npx -y github:JigSawFr/eurodns-mcp
 ```
 
 Store the secrets once with, for example,
@@ -252,7 +257,10 @@ the next restart.
 
 ```bash
 EURODNS_MCP_AUTH=token EURODNS_MCP_TOKEN="$(openssl rand -hex 32)" \
-  HOST=0.0.0.0 PORT=3000 npx eurodns-mcp-http
+  docker run --rm -p 3000:3000 \
+    -e EURODNS_APP_ID -e EURODNS_API_KEY \
+    -e EURODNS_MCP_AUTH -e EURODNS_MCP_TOKEN \
+    ghcr.io/jigsawfr/eurodns-mcp:latest
 ```
 
 The endpoint is `POST /mcp`; `GET /healthz` reports readiness without authentication.
@@ -273,7 +281,9 @@ discovery metadata.
 EURODNS_MCP_AUTH=oauth \
 EURODNS_OAUTH_ISSUER=https://issuer.example.com \
 EURODNS_MCP_PUBLIC_URL=https://mcp.example.com/mcp \
-  npx eurodns-mcp-http
+  docker run --rm -p 3000:3000 -e EURODNS_MCP_AUTH -e EURODNS_OAUTH_ISSUER \
+    -e EURODNS_MCP_PUBLIC_URL -e EURODNS_APP_ID -e EURODNS_API_KEY \
+    ghcr.io/jigsawfr/eurodns-mcp:latest
 ```
 
 At the authorization server, register this server as an API whose identifier is exactly
@@ -384,6 +394,33 @@ result says so, so you narrow the time range instead of concluding you have seen
 
 </details>
 
+## Deployment
+
+```bash
+cp .env.example .env    # credentials, plus a token: openssl rand -hex 32
+docker compose up -d
+curl localhost:3000/healthz
+```
+
+Published images live at `ghcr.io/jigsawfr/eurodns-mcp`, built for `linux/amd64` and
+`linux/arm64` with a build provenance attestation.
+
+Two things decide where this runs, and neither is the usual latency-or-price argument:
+
+- **The EuroDNS API filters by source IP**, so the host has to give you a stable — ideally
+  dedicated — egress address. An IP shared with other tenants keeps the mechanism and loses
+  the protection.
+- **The history query tool reads a file**, so the host needs a persistent disk. That rules
+  out platforms with an ephemeral filesystem.
+
+On both counts Fly.io comes out ahead, at a couple of dollars a month for a dedicated IPv4
+against roughly $100 elsewhere. [`deploy/`](deploy/README.md) has the per-platform detail,
+ready-made `fly.toml` and `render.yaml`, and the comparison in full.
+
+One setting catches everyone once: inside a container the server listens on `0.0.0.0`, and
+it **refuses to start on a non-loopback address without authentication**. Set
+`EURODNS_MCP_AUTH` to `token` or `oauth`.
+
 ## Development
 
 ```bash
@@ -400,6 +437,23 @@ committed output has drifted. Edit the generator or the curated names and descri
 
 Tests run against a real MCP client over an in-memory transport, with the HTTP layer driven
 through the real Express app. No test touches the network.
+
+### Releasing
+
+Releases are cut by [release-please](https://github.com/googleapis/release-please) from
+[Conventional Commit](https://www.conventionalcommits.org) subjects. It keeps a release pull
+request open, accumulating `CHANGELOG.md`; merging it tags the version, publishes a GitHub
+Release, and that Release triggers the image build.
+
+Only the **subject line** follows the convention — commit bodies stay prose. `feat:` bumps
+the minor, `fix:` the patch, and a `!` or `BREAKING CHANGE:` bumps the minor too while the
+project is pre-1.0.
+
+Squash merges are the most predictable setup, since the pull request title then becomes the
+commit subject — which is why CI checks that title. The failure mode this guards against is
+quiet: a non-conforming subject contributes nothing and no release appears.
+
+The version stays in `0.x` until the server has been exercised against the real EuroDNS API.
 
 ## Protocol version
 

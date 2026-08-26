@@ -1,7 +1,7 @@
 {
   "name": "eurodns-mcp-server",
   "version": "0.1.0",
-  "description": "Model Context Protocol server for the EuroDNS User API — domains, DNS zones, subscriptions and SSL.",
+  "description": "Model Context Protocol server for the EuroDNS User API \u2014 domains, DNS zones, subscriptions and SSL.",
   "keywords": [
     "mcp",
     "model-context-protocol",
@@ -36,6 +36,7 @@
   ],
   "scripts": {
     "gen": "tsx scripts/gen-operations.ts",
+    "prepare": "npm run build",
     "build": "npm run gen && tsc -p tsconfig.json",
     "dev": "tsx src/index.ts",
     "dev:http": "tsx src/http.ts",
@@ -43,8 +44,7 @@
     "test:watch": "vitest",
     "lint": "eslint . --max-warnings 0",
     "format": "prettier --write .",
-    "format:check": "prettier --check .",
-    "prepublishOnly": "npm run build"
+    "format:check": "prettier --check ."
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
