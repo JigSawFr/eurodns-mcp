@@ -1,0 +1,46 @@
+<evaluation>
+  <!--
+    Answers are placeholders. See README.md in this directory: they must be filled in from a
+    verified run against a real account, never guessed.
+  -->
+  <qa_pair>
+    <question>Among the domains in this account that are currently active, which one has DNSSEC enabled and also has at least one TXT record whose host begins with an underscore? Answer with the domain name.</question>
+    <answer>TO-BE-VERIFIED</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Look at the DNS zone of the account's primary domain. How many records in it are locked by the provider and therefore cannot be modified? Answer with the number.</question>
+    <answer>TO-BE-VERIFIED</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Find the contact profile that is set as the default registrant contact. What is the two-letter country code on that profile?</question>
+    <answer>TO-BE-VERIFIED</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Of the SSL subscriptions on this account, find the one covering the most SAN entries. How many SANs does it cover?</question>
+    <answer>TO-BE-VERIFIED</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Check the registration terms for the .lu TLD. What is the maximum registration period it allows, in years?</question>
+    <answer>TO-BE-VERIFIED</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Identify the nameserver profile used by the largest number of domains in this account. How many nameservers does that profile list?</question>
+    <answer>TO-BE-VERIFIED</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Find the most recent order on the account whose delivery status is not complete. Which product code does its first order line reference?</question>
+    <answer>TO-BE-VERIFIED</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Among the account's email subscriptions, find the one with the most mailbox aliases. How many aliases does it have?</question>
+    <answer>TO-BE-VERIFIED</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Take the account's primary domain and propose adding a TXT record at host "_dmarc" with value "v=DMARC1; p=none". Using the comparison tool only, and without writing anything, report whether this would be an addition or an update to an existing record. Answer "addition" or "update".</question>
+    <answer>TO-BE-VERIFIED</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Which currency is the account's prepaid balance denominated in? Answer with the three-letter currency code.</question>
+    <answer>TO-BE-VERIFIED</answer>
+  </qa_pair>
+</evaluation>
