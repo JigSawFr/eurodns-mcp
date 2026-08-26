@@ -399,8 +399,8 @@ function registerDiffZone(server: McpServer, context: ToolContext): void {
       },
       outputSchema: {
         zone: z.string(),
-        added: z.array(z.record(z.unknown())),
-        updated: z.array(z.record(z.unknown())),
+        added: z.array(z.record(z.string(), z.unknown())),
+        updated: z.array(z.record(z.string(), z.unknown())),
         unchanged: z.number(),
       },
       annotations: {

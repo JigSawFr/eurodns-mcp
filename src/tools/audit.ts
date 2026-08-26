@@ -64,7 +64,7 @@ export function registerAuditTools(server: McpServer, context: ToolContext): num
         limit: z.number().int().min(1).max(MAX_LIMIT).optional().describe('Default 50.'),
       },
       outputSchema: {
-        entries: z.array(z.record(z.unknown())),
+        entries: z.array(z.record(z.string(), z.unknown())),
         returned: z.number().int(),
         scanned: z.number().int(),
         truncated: z.boolean(),
