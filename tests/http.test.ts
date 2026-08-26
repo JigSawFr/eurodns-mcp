@@ -493,3 +493,52 @@ describe('both protocol eras on one endpoint', () => {
     expect(response.status).toBe(401);
   });
 });
+
+describe('rate limiting', () => {
+  const limited = (env: Record<string, string> = {}) =>
+    createApp(
+      httpConfig({
+        EURODNS_MCP_AUTH: 'token',
+        EURODNS_MCP_TOKEN: 'k'.repeat(48),
+        EURODNS_RATE_LIMIT: '3',
+        EURODNS_RATE_LIMIT_WINDOW_MS: '60000',
+        ...env,
+      }),
+    );
+
+  it('refuses the request past the limit, with a JSON-RPC error', async () => {
+    const app = await limited();
+    // Unauthenticated on purpose: the flood worth absorbing is the one that never had a
+    // token, and the limiter sits in front of the bearer check for exactly that reason.
+    const fire = () => request(app).post('/mcp').send(listToolsBody);
+
+    for (let i = 0; i < 3; i += 1) expect((await fire()).status).toBe(401);
+
+    const refused = await fire();
+    expect(refused.status).toBe(429);
+    // A JSON-RPC caller gets a JSON-RPC answer; a bare HTML 429 reads as a protocol
+    // violation to a client that is parsing every response.
+    expect(refused.body.jsonrpc).toBe('2.0');
+    expect(refused.body.error.code).toBe(-32000);
+  });
+
+  it('leaves the health probe and the metrics poller alone', async () => {
+    // Both are polled continuously by machines doing their job. Limiting either turns
+    // ordinary supervision into an outage.
+    const app = await limited({ EURODNS_METRICS_TOKEN: 'm'.repeat(48) });
+    for (let i = 0; i < 10; i += 1) await request(app).post('/mcp').send(listToolsBody);
+
+    expect((await request(app).get('/healthz')).status).toBe(200);
+    const metrics = await request(app)
+      .get('/metrics')
+      .set('Authorization', `Bearer ${'m'.repeat(48)}`);
+    expect(metrics.status).toBe(200);
+  });
+
+  it('is off entirely at zero', async () => {
+    const app = await limited({ EURODNS_RATE_LIMIT: '0' });
+    for (let i = 0; i < 8; i += 1) {
+      expect((await request(app).post('/mcp').send(listToolsBody)).status).toBe(401);
+    }
+  });
+});

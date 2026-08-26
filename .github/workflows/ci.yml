@@ -113,6 +113,8 @@ jobs:
             -e EURODNS_AUDIT_FILE=/data/audit.jsonl \
             -e EURODNS_AUDIT_QUERY=all \
             -e EURODNS_METRICS_TOKEN="$METRICS_TOKEN" \
+            -e EURODNS_RATE_LIMIT=50 \
+            -e EURODNS_RATE_LIMIT_WINDOW_MS=600000 \
             -v ci-audit:/data \
             eurodns-mcp:ci
 
@@ -261,6 +263,34 @@ jobs:
           if echo "$body" | grep -qi 'test-api-key\|static-token'; then
             echo "::error::/metrics must not carry a credential or an actor"; exit 1
           fi
+
+      # Deliberately last: it exhausts the window for the rest of the job. The probe is an
+      # unauthenticated POST, which is the point — a request that never reaches the auth
+      # middleware still counts, so this proves the limiter sits in front of it rather than
+      # behind. The container runs with a limit of 50 over a ten-minute window, long enough
+      # that the window cannot roll over mid-step and hide a failure.
+      - name: The rate limit trips on /mcp, and only there
+        run: |
+          seen429=0
+          for i in $(seq 1 120); do
+            code=$(curl -s -o /tmp/rl-body -w '%{http_code}' -X POST localhost:3000/mcp \
+              -H 'Content-Type: application/json' \
+              -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}')
+            if [ "$code" = "429" ]; then seen429=$i; break; fi
+            [ "$code" = "401" ] || { echo "::error::request $i answered $code, expected 401 or 429"; exit 1; }
+          done
+          [ "$seen429" != "0" ] || { echo "::error::120 unauthenticated requests never hit the limit"; exit 1; }
+          echo "limited after $seen429 requests"
+
+          # A bare HTML 429 would leave an MCP client with nothing to parse.
+          cat /tmp/rl-body; echo
+          python3 -c 'import json,sys; d=json.load(open("/tmp/rl-body")); assert d["jsonrpc"]=="2.0" and d["error"]["code"]==-32000, d'
+
+          # The probes that machines run must survive a flood on the endpoint next door.
+          curl -fsS localhost:3000/healthz >/dev/null \
+            || { echo "::error::/healthz was caught by the limiter"; exit 1; }
+          curl -fsS localhost:3000/metrics -H "Authorization: Bearer $METRICS_TOKEN" >/dev/null \
+            || { echo "::error::/metrics was caught by the limiter"; exit 1; }
 
       - name: Container logs
         if: always()

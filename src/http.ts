@@ -3,6 +3,7 @@ import { realpathSync } from 'node:fs';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import express, { type NextFunction, type Request, type Response } from 'express';
+import rateLimit from 'express-rate-limit';
 import {
   mcpAuthMetadataRouter,
   getOAuthProtectedResourceMetadataUrl,
@@ -131,9 +132,24 @@ export async function createApp(
   // Nothing gains from announcing the framework and version to an unauthenticated caller.
   app.disable('x-powered-by');
 
+  // Only trust forwarded client addresses when an operator says how many proxies sit in
+  // front. Express defaults to trusting none, and so do we — see the config comment for why
+  // getting this wrong makes the limiter below worse than absent.
+  if (config.http.trustProxy > 0) app.set('trust proxy', config.http.trustProxy);
+
   // The origin check runs before the body parser, not after: rejecting a cross-origin
   // request should not first require parsing the document it carries.
   app.use(originGuard(config.http.allowedOrigins));
+
+  // Before the body parser and before authentication, because the flood worth absorbing is
+  // the unauthenticated one: a 401 is cheap but not free, and neither is parsing a megabyte
+  // to discover the caller has no token.
+  //
+  // Scoped to /mcp alone. /healthz has to stay reachable by platform probes that poll it
+  // every few seconds, and /metrics by a monitoring system doing exactly the same — putting
+  // either behind a limiter turns ordinary supervision into an outage.
+  registerRateLimit(app, config);
+
   app.use(express.json({ limit: config.http.maxBodyBytes }));
   await buildAuthLayer(app, config, options);
 
@@ -178,6 +194,40 @@ export async function createApp(
   registerMetricsEndpoint(app, config, metrics);
 
   return app;
+}
+
+/**
+ * Rate-limits the MCP endpoint, when enabled.
+ *
+ * The store is in memory, so the count is per process. That matches the rest of this
+ * deployment — the audit log is a file on one volume — but it means scaling out multiplies
+ * the effective limit by the number of instances rather than sharing it.
+ */
+function registerRateLimit(app: express.Express, config: Config): void {
+  const { rateLimit: max, rateLimitWindowMs } = config.http;
+  if (max === 0) return;
+
+  app.use(
+    MCP_ENDPOINT,
+    rateLimit({
+      windowMs: rateLimitWindowMs,
+      limit: max,
+      standardHeaders: 'draft-8',
+      legacyHeaders: false,
+      // A JSON-RPC caller gets a JSON-RPC answer. -32000 is the implementation-defined
+      // server error range; a bare HTML 429 would be parsed as a protocol violation.
+      handler: (_req: Request, res: Response) => {
+        res.status(429).json({
+          jsonrpc: '2.0',
+          id: null,
+          error: {
+            code: -32000,
+            message: `Rate limit exceeded: more than ${max} requests in ${rateLimitWindowMs} ms.`,
+          },
+        });
+      },
+    }),
+  );
 }
 
 /**
