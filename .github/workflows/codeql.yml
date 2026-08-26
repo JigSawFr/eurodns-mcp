@@ -17,6 +17,15 @@ permissions:
 
 jobs:
   analyze:
+    # Code scanning is free on public repositories and requires GitHub Advanced Security on
+    # private ones. While this repository is private the upload fails with "Code scanning is
+    # not enabled for this repository" *after* a full successful scan, which is a red check
+    # that says nothing about the code. Gating on visibility keeps the workflow committed and
+    # correct, and it starts working by itself the day the repository is made public.
+    #
+    # `github.event.repository` is populated for schedule as well as push and pull_request,
+    # so the weekly run is gated the same way rather than being the one that still fails.
+    if: github.event.repository.visibility == 'public'
     runs-on: ubuntu-latest
     permissions:
       security-events: write
