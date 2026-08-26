@@ -1,4 +1,4 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import { evaluateGuardrails } from '../auth/scopes.js';
 import { AUDIT_SCOPE } from '../constants.js';
@@ -38,7 +38,7 @@ export function registerAuditTools(server: McpServer, context: ToolContext): num
         (scopedToCaller
           ? 'Results are limited to the calling identity’s own actions.'
           : 'Results cover every caller.'),
-      inputSchema: {
+      inputSchema: z.object({
         since: z.string().optional().describe('ISO 8601 lower bound, e.g. 2026-01-01T00:00:00Z.'),
         until: z.string().optional().describe('ISO 8601 upper bound.'),
         tool: z.string().optional().describe('Exact tool name, e.g. eurodns_dns_upsert_record.'),
@@ -62,8 +62,8 @@ export function registerAuditTools(server: McpServer, context: ToolContext): num
               'default: the "completed" line carries the outcome.',
           ),
         limit: z.number().int().min(1).max(MAX_LIMIT).optional().describe('Default 50.'),
-      },
-      outputSchema: {
+      }),
+      outputSchema: z.object({
         entries: z.array(z.record(z.string(), z.unknown())),
         returned: z.number().int(),
         scanned: z.number().int(),
@@ -74,7 +74,7 @@ export function registerAuditTools(server: McpServer, context: ToolContext): num
           brokenAt: z.number().int().optional(),
           segments: z.number().int(),
         }),
-      },
+      }),
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -82,8 +82,8 @@ export function registerAuditTools(server: McpServer, context: ToolContext): num
         openWorldHint: false,
       },
     },
-    async (args, extra) => {
-      const identity = identityFrom(context, extra?.authInfo);
+    async (args, ctx) => {
+      const identity = identityFrom(context, ctx?.http?.authInfo);
 
       // Reading the history is itself an action, and is recorded like any other.
       const span = context.audit.begin({

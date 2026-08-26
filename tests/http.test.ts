@@ -394,3 +394,102 @@ describe('audit scope', () => {
     expect(response.status).toBe(200);
   });
 });
+
+describe('both protocol eras on one endpoint', () => {
+  // The 2026-07-28 revision removed `initialize` and routes on headers instead. A modern
+  // request is one carrying the `_meta` envelope claim *and* the matching headers; anything
+  // without the claim is classified 2025-era and served by the legacy fallback. Both paths
+  // matter: the new spec is what this server now speaks, and 2025 is what most clients
+  // still are.
+  const modern = (app: Awaited<ReturnType<typeof createApp>>, method: string) =>
+    request(app)
+      .post('/mcp')
+      .set('Authorization', `Bearer ${'k'.repeat(48)}`)
+      .set('Accept', 'application/json, text/event-stream')
+      .set('MCP-Protocol-Version', '2026-07-28')
+      .set('Mcp-Method', method)
+      .send({
+        jsonrpc: '2.0',
+        id: 1,
+        method,
+        params: {
+          _meta: {
+            'io.modelcontextprotocol/protocolVersion': '2026-07-28',
+            'io.modelcontextprotocol/clientInfo': { name: 'test', version: '0' },
+            'io.modelcontextprotocol/clientCapabilities': {},
+          },
+        },
+      });
+
+  const tokenApp = () =>
+    createApp(
+      loadConfig(
+        {
+          EURODNS_APP_ID: 'a',
+          EURODNS_API_KEY: 'b',
+          EURODNS_MAX_RETRIES: '0',
+          EURODNS_AUDIT_DESTINATION: 'none',
+          EURODNS_MCP_AUTH: 'token',
+          EURODNS_MCP_TOKEN: 'k'.repeat(48),
+        } as NodeJS.ProcessEnv,
+        'http',
+      ),
+    );
+
+  /** The transport answers either as one JSON body or as a single SSE frame. */
+  const payload = (res: { text: string; body: unknown }): Record<string, unknown> => {
+    const frame = res.text.split('\n').find((l) => l.startsWith('data: '));
+    return (frame ? JSON.parse(frame.slice(6)) : res.body) as Record<string, unknown>;
+  };
+
+  it('answers server/discover, which replaced the initialize handshake', async () => {
+    const response = await modern(await tokenApp(), 'server/discover');
+    const result = payload(response).result as Record<string, unknown>;
+
+    expect(response.status).toBe(200);
+    // Fields the 2026-07-28 revision introduced: a typed result and cacheable list metadata.
+    expect(result).toHaveProperty('resultType');
+    expect(result).toHaveProperty('supportedVersions');
+  });
+
+  it('serves the full tool surface over the modern path', async () => {
+    const response = await modern(await tokenApp(), 'tools/list');
+    const result = payload(response).result as { tools: unknown[] };
+
+    expect(response.status).toBe(200);
+    expect(result.tools.length).toBeGreaterThanOrEqual(80);
+  });
+
+  it('still serves a 2025-era client on the same endpoint', async () => {
+    // No envelope claim, and an `initialize` handshake: the legacy classification, which
+    // `legacy: 'stateless'` answers rather than rejects.
+    const response = await request(await tokenApp())
+      .post('/mcp')
+      .set('Authorization', `Bearer ${'k'.repeat(48)}`)
+      .set('Accept', 'application/json, text/event-stream')
+      .send({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: {
+          protocolVersion: '2025-11-25',
+          capabilities: {},
+          clientInfo: { name: 'legacy', version: '0' },
+        },
+      });
+
+    const result = payload(response).result as { protocolVersion: string };
+    expect(response.status).toBe(200);
+    expect(result.protocolVersion).toBe('2025-11-25');
+  });
+
+  it('refuses an unauthenticated modern request like any other', async () => {
+    const response = await request(await tokenApp())
+      .post('/mcp')
+      .set('MCP-Protocol-Version', '2026-07-28')
+      .set('Mcp-Method', 'tools/list')
+      .send({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} });
+
+    expect(response.status).toBe(401);
+  });
+});

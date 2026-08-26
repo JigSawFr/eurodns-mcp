@@ -3,13 +3,14 @@ import { realpathSync } from 'node:fs';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import express, { type NextFunction, type Request, type Response } from 'express';
-import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import {
   mcpAuthMetadataRouter,
   getOAuthProtectedResourceMetadataUrl,
-} from '@modelcontextprotocol/sdk/server/auth/router.js';
-import { requireBearerAuth } from '@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js';
-import type { OAuthTokenVerifier } from '@modelcontextprotocol/sdk/server/auth/provider.js';
+  requireBearerAuth,
+  type OAuthTokenVerifier,
+} from '@modelcontextprotocol/express';
+import { createMcpHandler } from '@modelcontextprotocol/server';
+import { toNodeHandler } from '@modelcontextprotocol/node';
 import { ConfigError, loadConfig, type Config } from './config.js';
 import { OnePasswordError, resolveEnvSecrets } from './secrets/index.js';
 import { ALL_SCOPES } from './constants.js';
@@ -142,28 +143,29 @@ export async function createApp(
   const metrics = options.metrics ?? new MetricsRegistry();
   const audit = new AuditLogger(config.audit, Date.now, metrics);
 
-  app.post(MCP_ENDPOINT, async (req: Request, res: Response) => {
-    // Stateless: a fresh server and transport per request, so nothing is shared between
-    // callers and the deployment scales without sticky sessions.
-    const { server } = buildServer({
-      config,
-      transport: 'http',
-      metrics,
-      audit,
-      ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
-    });
-    const transport = new StreamableHTTPServerTransport({
-      sessionIdGenerator: undefined,
-      enableJsonResponse: true,
-    });
+  // One factory, both protocol eras. `legacy: 'stateless'` is the default and is what keeps
+  // 2025-era clients — which is still most of them — working against the same endpoint while
+  // the handler serves 2026-07-28 natively. The factory is called per request, which is the
+  // shape this server already had: nothing is shared between callers and the deployment
+  // scales without sticky sessions.
+  const mcpHandler = toNodeHandler(
+    createMcpHandler(
+      () =>
+        buildServer({
+          config,
+          transport: 'http',
+          metrics,
+          audit,
+          ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
+        }).server,
+      { legacy: 'stateless' },
+    ),
+  );
 
-    res.on('close', () => {
-      void transport.close();
-      void server.close();
-    });
-
-    await server.connect(transport);
-    await transport.handleRequest(req, res, req.body);
+  app.all(MCP_ENDPOINT, (req: Request, res: Response) => {
+    // The body is already parsed by express.json above; handing it over avoids a second read
+    // of a stream that has been consumed.
+    void mcpHandler(req, res, req.body);
   });
 
   // Liveness only. The endpoint is deliberately unauthenticated so a platform health check

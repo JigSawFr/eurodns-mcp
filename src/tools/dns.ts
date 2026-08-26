@@ -1,4 +1,4 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer, AuthInfo } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import { evaluateGuardrails } from '../auth/scopes.js';
 import { EuroDnsApiError, EuroDnsTransportError } from '../services/errors.js';
@@ -17,7 +17,6 @@ import {
 import { identityFrom } from './registry.js';
 import type { ToolContext } from './context.js';
 import type { RiskClass } from '../constants.js';
-import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 
 /**
  * Workflow tools for DNS records.
@@ -130,7 +129,7 @@ function registerUpsertRecord(server: McpServer, context: ToolContext): void {
         'host. Reads the zone, applies the change, validates it with the API, and saves only ' +
         'if validation passes. Prefer this over saving a zone directly: saving replaces the ' +
         'whole zone and drops anything not included.',
-      inputSchema: {
+      inputSchema: z.object({
         domainName: z.string().describe('Zone to modify, e.g. example.com.'),
         type: RecordTypeSchema.describe('Record type, e.g. A, AAAA, CNAME, MX, TXT.'),
         host: z.string().describe('Node the record applies to. Use "" or "@" for the apex.'),
@@ -143,8 +142,8 @@ function registerUpsertRecord(server: McpServer, context: ToolContext): void {
             'Update only the record whose current value matches this. Use when several ' +
               'records share a type and host, such as multiple TXT entries.',
           ),
-      },
-      outputSchema: {
+      }),
+      outputSchema: z.object({
         action: z.enum(['created', 'updated']),
         zone: z.string(),
         record: z.object({
@@ -153,7 +152,7 @@ function registerUpsertRecord(server: McpServer, context: ToolContext): void {
           rdata: z.string(),
           ttl: z.number().optional(),
         }),
-      },
+      }),
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
@@ -161,8 +160,8 @@ function registerUpsertRecord(server: McpServer, context: ToolContext): void {
         openWorldHint: true,
       },
     },
-    async (args, extra) => {
-      const { span, decision } = beginCall(context, extra?.authInfo, {
+    async (args, ctx) => {
+      const { span, decision } = beginCall(context, ctx?.http?.authInfo, {
         tool: name,
         risk: 'write',
         target: args.domainName,
@@ -270,13 +269,13 @@ function registerDeleteRecord(server: McpServer, context: ToolContext): void {
         'Deletes a DNS record identified by type and host, resolving its internal id from the ' +
         'zone first. Give rdata as well when several records share a type and host. Refuses ' +
         'to act when the selection is ambiguous rather than guessing.',
-      inputSchema: {
+      inputSchema: z.object({
         domainName: z.string().describe('Zone to modify, e.g. example.com.'),
         type: RecordTypeSchema.describe('Record type of the record to delete.'),
         host: z.string().describe('Node the record applies to. Use "" or "@" for the apex.'),
         rdata: z.string().optional().describe('Exact current value, to disambiguate.'),
-      },
-      outputSchema: {
+      }),
+      outputSchema: z.object({
         deleted: z.object({
           id: z.number(),
           type: z.string(),
@@ -284,7 +283,7 @@ function registerDeleteRecord(server: McpServer, context: ToolContext): void {
           rdata: z.string(),
         }),
         zone: z.string(),
-      },
+      }),
       annotations: {
         readOnlyHint: false,
         destructiveHint: true,
@@ -292,8 +291,8 @@ function registerDeleteRecord(server: McpServer, context: ToolContext): void {
         openWorldHint: true,
       },
     },
-    async (args, extra) => {
-      const { span, decision } = beginCall(context, extra?.authInfo, {
+    async (args, ctx) => {
+      const { span, decision } = beginCall(context, ctx?.http?.authInfo, {
         tool: name,
         risk: 'write',
         target: args.domainName,
@@ -393,16 +392,16 @@ function registerDiffZone(server: McpServer, context: ToolContext): void {
       description:
         'Reports what would change if the given records were applied to a zone, without ' +
         'writing anything. Use this to review a change before making it.',
-      inputSchema: {
+      inputSchema: z.object({
         domainName: z.string().describe('Zone to compare against, e.g. example.com.'),
         records: z.array(RecordInputSchema).describe('Records the caller intends to end up with.'),
-      },
-      outputSchema: {
+      }),
+      outputSchema: z.object({
         zone: z.string(),
         added: z.array(z.record(z.string(), z.unknown())),
         updated: z.array(z.record(z.string(), z.unknown())),
         unchanged: z.number(),
-      },
+      }),
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -410,8 +409,8 @@ function registerDiffZone(server: McpServer, context: ToolContext): void {
         openWorldHint: true,
       },
     },
-    async (args, extra) => {
-      const { span, decision } = beginCall(context, extra?.authInfo, {
+    async (args, ctx) => {
+      const { span, decision } = beginCall(context, ctx?.http?.authInfo, {
         tool: name,
         risk: 'read',
         target: args.domainName,

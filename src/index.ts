@@ -1,8 +1,9 @@
 #!/usr/bin/env node
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { serveStdio } from '@modelcontextprotocol/server/stdio';
 import { ConfigError, loadConfig } from './config.js';
 import { OnePasswordError, resolveEnvSecrets } from './secrets/index.js';
 import { SERVER_NAME, SERVER_VERSION, buildServer } from './server.js';
+import { AuditLogger } from './audit.js';
 
 /**
  * stdio entry point.
@@ -13,10 +14,16 @@ import { SERVER_NAME, SERVER_VERSION, buildServer } from './server.js';
  */
 async function main(): Promise<void> {
   const config = loadConfig(await resolveEnvSecrets(process.env), 'stdio');
-  const { server, toolCount } = buildServer({ config, transport: 'stdio' });
 
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
+  // One logger for the process, as on HTTP: it carries the audit log's hash chain, and a
+  // logger rebuilt alongside the server would start a fresh chain segment.
+  const audit = new AuditLogger(config.audit);
+  const { toolCount } = buildServer({ config, transport: 'stdio', audit });
+
+  // serveStdio owns the era decision for the connection: the opening exchange selects
+  // 2026-07-28 or 2025, one instance is pinned for its lifetime, and the same factory
+  // serves both. Nothing here has to know which era the client speaks.
+  serveStdio(() => buildServer({ config, transport: 'stdio', audit }).server);
 
   process.stderr.write(`${SERVER_NAME} ${SERVER_VERSION} ready on stdio with ${toolCount} tools\n`);
 }
