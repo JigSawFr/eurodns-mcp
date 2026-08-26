@@ -1,11 +1,26 @@
-import { mkdtempSync, readFileSync, existsSync, statSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync, existsSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import request from 'supertest';
+import { createApp } from '../src/http.js';
 import { loadConfig, ConfigError } from '../src/config.js';
-import { AuditLogger, ROTATED_SUFFIX } from '../src/audit.js';
-import { queryAuditLog } from '../src/auditReader.js';
+import { AuditLogger, ROTATED_SUFFIX, hashLine } from '../src/audit.js';
+import { queryAuditLog, verifyChain } from '../src/auditReader.js';
 import { connect, stubFetch, testConfig } from './harness.js';
+
+/** Writes `count` completed lines to `file` through a fresh logger. */
+function write(file: string, count: number, maxBytes = 0): void {
+  const logger = new AuditLogger(
+    { destination: 'file', filePath: file, query: 'all', maxBytes },
+    () => Date.parse('2026-01-01T00:00:00Z'),
+  );
+  for (let i = 0; i < count; i += 1) {
+    logger
+      .begin({ actor: { mode: 'stdio', subject: 'tester' }, tool: `t${i}`, risk: 'read' })
+      .complete({ verdict: 'allowed' });
+  }
+}
 
 interface AuditLine {
   phase: string;
@@ -168,16 +183,7 @@ describe('audit log', () => {
 
   it('rotates at its size ceiling instead of growing without bound', () => {
     const file = auditFile();
-    const logger = new AuditLogger(
-      { destination: 'file', filePath: file, query: 'all', maxBytes: 400 },
-      () => Date.parse('2026-01-01T00:00:00Z'),
-    );
-
-    for (let i = 0; i < 20; i += 1) {
-      logger
-        .begin({ actor: { mode: 'stdio', subject: 'tester' }, tool: `t${i}`, risk: 'read' })
-        .complete({ verdict: 'allowed' });
-    }
+    write(file, 20, 400);
 
     expect(existsSync(`${file}${ROTATED_SUFFIX}`)).toBe(true);
     expect(statSync(file).size).toBeLessThanOrEqual(400);
@@ -187,16 +193,7 @@ describe('audit log', () => {
 
   it('answers the history query across a rotation', () => {
     const file = auditFile();
-    const logger = new AuditLogger(
-      { destination: 'file', filePath: file, query: 'all', maxBytes: 400 },
-      () => Date.parse('2026-01-01T00:00:00Z'),
-    );
-
-    for (let i = 0; i < 20; i += 1) {
-      logger
-        .begin({ actor: { mode: 'stdio', subject: 'tester' }, tool: `t${i}`, risk: 'read' })
-        .complete({ verdict: 'allowed' });
-    }
+    write(file, 20, 400);
 
     // Only the two live generations survive — that is the point of a bounded log. What the
     // query must not do is stop at the current file and report the rest as absent, which
@@ -211,6 +208,135 @@ describe('audit log', () => {
     expect(result.entries.map((e) => e.tool)).toContain(
       readLines(`${file}${ROTATED_SUFFIX}`)[0]?.tool,
     );
+  });
+
+  it('chains each line to the one before it', () => {
+    const file = auditFile();
+    write(file, 5);
+
+    const raw = readFileSync(file, 'utf8')
+      .split('\n')
+      .filter((l) => l !== '');
+    const lines = raw.map((l) => JSON.parse(l) as { seq: number; prev: string | null });
+
+    expect(lines[0]?.prev).toBeNull();
+    expect(lines.map((l) => l.seq)).toEqual([1, 2, 3, 4, 5]);
+    for (let i = 1; i < raw.length; i += 1) {
+      expect(lines[i]?.prev).toBe(hashLine(raw[i - 1] as string));
+    }
+  });
+
+  it('detects a line edited after it was written', () => {
+    const file = auditFile();
+    write(file, 6);
+
+    const lines = readFileSync(file, 'utf8')
+      .split('\n')
+      .filter((l) => l !== '');
+    // Change the recorded target of one call — the whole point of tampering with an audit
+    // log is to make a change look like it happened to something else.
+    const forged = (lines[2] as string).replace('"tool":"t2"', '"tool":"innocent"');
+    expect(forged).not.toBe(lines[2]);
+    lines[2] = forged;
+    writeFileSync(file, `${lines.join('\n')}\n`, 'utf8');
+
+    const result = queryAuditLog(file, { limit: 100 });
+    expect(result.chain.intact).toBe(false);
+    // The break surfaces at the line after the forgery, whose recorded hash no longer matches.
+    expect(result.chain.brokenAt).toBe(4);
+  });
+
+  it('detects a line removed from the middle', () => {
+    const file = auditFile();
+    write(file, 6);
+
+    const lines = readFileSync(file, 'utf8')
+      .split('\n')
+      .filter((l) => l !== '');
+    lines.splice(3, 1);
+    writeFileSync(file, `${lines.join('\n')}\n`, 'utf8');
+
+    expect(queryAuditLog(file, { limit: 100 }).chain.intact).toBe(false);
+  });
+
+  it('reports an untouched log as intact, across a restart and a rotation', () => {
+    const file = auditFile();
+    // Two loggers over the same file stand in for a restart: the second has to pick the
+    // chain back up from disk rather than starting a fresh segment.
+    write(file, 4);
+    write(file, 4);
+
+    const result = queryAuditLog(file, { limit: 100 });
+    expect(result.chain.intact).toBe(true);
+    expect(result.chain.verified).toBe(7);
+    expect(result.chain.segments).toBe(0);
+  });
+
+  it('does not accuse a log of tampering when the process simply restarted on a stream', () => {
+    // On stderr or stdout the process cannot see what a previous run wrote, so each start
+    // opens a segment. A verifier must read that as a restart, not as a break.
+    const lines = [
+      JSON.stringify({ tool: 'a', seq: 1, prev: null }),
+      JSON.stringify({ tool: 'b', seq: 2, prev: null }),
+    ];
+    const status = verifyChain(lines);
+    expect(status.intact).toBe(true);
+    expect(status.segments).toBe(1);
+  });
+
+  it('keeps one chain across HTTP requests, which each build their own server', async () => {
+    // The HTTP transport rebuilds the server per call. A logger rebuilt with it would open
+    // a fresh segment every time — on a stream there is no file to resume from, so the
+    // chain would never link and every line would carry prev: null.
+    const written: string[] = [];
+    const spy = vi.spyOn(process.stdout, 'write').mockImplementation((chunk: unknown) => {
+      written.push(String(chunk));
+      return true;
+    });
+
+    try {
+      const token = 'k'.repeat(48);
+      const { fetchImpl } = stubFetch(() => ({ body: {} }));
+      const app = await createApp(
+        loadConfig(
+          {
+            EURODNS_APP_ID: 'a',
+            EURODNS_API_KEY: 'b',
+            EURODNS_MAX_RETRIES: '0',
+            EURODNS_MCP_AUTH: 'token',
+            EURODNS_MCP_TOKEN: token,
+            EURODNS_AUDIT_DESTINATION: 'stdout',
+          } as NodeJS.ProcessEnv,
+          'http',
+        ),
+        { fetchImpl },
+      );
+
+      for (let i = 0; i < 3; i += 1) {
+        await request(app)
+          .post('/mcp')
+          .set('Authorization', `Bearer ${token}`)
+          .set('Accept', 'application/json, text/event-stream')
+          .send({
+            jsonrpc: '2.0',
+            id: 1,
+            method: 'tools/call',
+            params: { name: 'eurodns_tld_list', arguments: {} },
+          });
+      }
+
+      const lines = written
+        .join('')
+        .split('\n')
+        .filter((l) => l.startsWith('{'))
+        .map((l) => JSON.parse(l) as { seq: number; prev: string | null });
+
+      expect(lines).toHaveLength(3);
+      expect(lines.map((l) => l.seq)).toEqual([1, 2, 3]);
+      expect(lines.filter((l) => l.prev === null)).toHaveLength(1);
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it('refuses to write the audit log to stdout under stdio, where JSON-RPC lives', () => {
