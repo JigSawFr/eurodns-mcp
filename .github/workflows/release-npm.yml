@@ -1,0 +1,42 @@
+name: Publish to npm
+
+# Prepared, deliberately not automatic.
+#
+# The package is not on npm yet, so this runs only when started by hand. To make releases
+# publish automatically, add the release trigger back:
+#
+#   on:
+#     release:
+#       types: [published]
+#
+# Two things have to be in place first: the name `eurodns-mcp-server` claimed on npmjs, and
+# a trusted publisher configured there pointing at this repository and this workflow file.
+#
+# There is no NPM_TOKEN. Trusted publishing authenticates over OIDC, and the npm CLI then
+# attaches a provenance attestation on its own — which is why `id-token: write` below is
+# what makes this work rather than a stored secret.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+          cache: npm
+
+      # Trusted publishing needs a recent CLI; the one bundled with Node may predate it.
+      - run: npm install -g npm@latest
+
+      - run: npm ci
+      - run: npm test
+      - run: npm publish
