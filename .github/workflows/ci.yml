@@ -139,22 +139,64 @@ jobs:
             echo "::error::the framework banner should be off"; exit 1
           fi
 
+      # Reads either shape of answer. The 2026-07-28 path replies with a JSON body; the
+      # 2025-era path replies with a single SSE frame, because v2 builds that transport
+      # without enableJsonResponse. Both are valid streamable HTTP, so the assertions below
+      # must not care which one they got.
+      - name: Install a response reader
+        run: |
+          cat > /tmp/mcp-read.py <<'PY'
+          import json, sys
+          raw = sys.stdin.read()
+          frame = next((l[6:] for l in raw.splitlines() if l.startswith('data: ')), None)
+          doc = json.loads(frame if frame is not None else raw)
+          if 'error' in doc:
+              print('ERROR', doc['error'].get('code'), doc['error'].get('message', ''), file=sys.stderr)
+              raise SystemExit(1)
+          print(json.dumps(doc.get('result', {})))
+          PY
+
       - name: Reject an unauthenticated call
         run: |
           code=$(curl -s -o /dev/null -w '%{http_code}' -X POST localhost:3000/mcp \
             -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}')
           [ "$code" = "401" ] || { echo "::error::expected 401, got $code"; exit 1; }
 
-      - name: List tools with a token
+      - name: List tools as a 2025-era client
         run: |
           count=$(curl -fsS -X POST localhost:3000/mcp \
             -H "Authorization: Bearer $TOKEN" \
             -H 'Content-Type: application/json' \
             -H 'Accept: application/json, text/event-stream' \
             -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' \
-            | python3 -c 'import json,sys; print(len(json.load(sys.stdin)["result"]["tools"]))')
+            | python3 /tmp/mcp-read.py \
+            | python3 -c 'import json,sys; print(len(json.load(sys.stdin)["tools"]))')
           echo "tools: $count"
           [ "$count" -ge 80 ] || { echo "::error::expected the full tool surface, got $count"; exit 1; }
+
+      # The whole point of the migration: the new revision served natively, on the same
+      # endpoint, to a client that never sends `initialize`. A modern request is one carrying
+      # the _meta envelope claim and the matching headers — a header without the claim is
+      # answered -32602, so this also proves the envelope is being read.
+      - name: Serve the 2026-07-28 revision natively
+        run: |
+          modern() {
+            curl -fsS -X POST localhost:3000/mcp \
+              -H "Authorization: Bearer $TOKEN" \
+              -H 'Content-Type: application/json' \
+              -H 'Accept: application/json, text/event-stream' \
+              -H 'MCP-Protocol-Version: 2026-07-28' \
+              -H "Mcp-Method: $1" \
+              -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"$1\",\"params\":{\"_meta\":{\"io.modelcontextprotocol/protocolVersion\":\"2026-07-28\",\"io.modelcontextprotocol/clientInfo\":{\"name\":\"ci\",\"version\":\"0\"},\"io.modelcontextprotocol/clientCapabilities\":{}}}}" \
+              | python3 /tmp/mcp-read.py
+          }
+
+          discover=$(modern 'server/discover')
+          echo "$discover" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert "resultType" in d and "supportedVersions" in d, d.keys(); print("discover:", ", ".join(sorted(d)))'
+
+          count=$(modern 'tools/list' | python3 -c 'import json,sys; print(len(json.load(sys.stdin)["tools"]))')
+          echo "modern tools: $count"
+          [ "$count" -ge 80 ] || { echo "::error::the modern path returned $count tools"; exit 1; }
 
       # Proves the audit log survives on the volume: the first query writes its own line and
       # sees nothing, the second reads that line back. This is also the only tool that needs
@@ -167,7 +209,8 @@ jobs:
               -H 'Content-Type: application/json' \
               -H 'Accept: application/json, text/event-stream' \
               -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"eurodns_audit_query","arguments":{}}}' \
-              | python3 -c 'import json,sys; print(json.load(sys.stdin)["result"]["structuredContent"]["returned"])'
+              | python3 /tmp/mcp-read.py \
+              | python3 -c 'import json,sys; print(json.load(sys.stdin)["structuredContent"]["returned"])'
           }
           first=$(query); second=$(query)
           echo "returned: first=$first second=$second"
