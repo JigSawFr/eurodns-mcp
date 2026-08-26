@@ -1,7 +1,16 @@
-import { appendFileSync } from 'node:fs';
+import { appendFileSync, chmodSync, renameSync, statSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import type { AuditConfig } from './config.js';
 import type { RiskClass } from './constants.js';
+
+/**
+ * Permissions for the audit file.
+ *
+ * This is the only record attributing a DNS change to a person, so it should not be
+ * readable by every account on the host. The suffix a rotated generation takes.
+ */
+export const AUDIT_FILE_MODE = 0o600;
+export const ROTATED_SUFFIX = '.1';
 
 /**
  * Who performed an action. The upstream API sees a single shared API key for every
@@ -45,6 +54,8 @@ export interface AuditSpan {
 export class AuditLogger {
   private readonly config: AuditConfig;
   private readonly now: () => number;
+  /** Bytes in the current log file. Read from disk once, then tracked. */
+  private fileBytes: number | undefined;
 
   constructor(config: AuditConfig, now: () => number = Date.now) {
     this.config = config;
@@ -112,7 +123,7 @@ export class AuditLogger {
         return;
       case 'file':
         try {
-          appendFileSync(this.config.filePath as string, serialized, 'utf8');
+          this.appendToFile(this.config.filePath as string, serialized);
         } catch (cause) {
           // An unwritable audit file must not take the server down, but it must be visible.
           process.stderr.write(
@@ -126,5 +137,46 @@ export class AuditLogger {
         }
         return;
     }
+  }
+
+  /**
+   * Appends one line, rotating first when the file has reached its ceiling.
+   *
+   * The size is tracked in memory and read from disk only once, so the common path costs no
+   * extra syscall. Rotation replaces any previous `.1`, bounding the log at twice the
+   * configured size; the history query reads across both generations.
+   */
+  private appendToFile(filePath: string, serialized: string): void {
+    const bytes = Buffer.byteLength(serialized, 'utf8');
+
+    if (this.fileBytes === undefined) {
+      this.fileBytes = this.adoptExistingFile(filePath);
+    }
+
+    const { maxBytes } = this.config;
+    if (maxBytes > 0 && this.fileBytes > 0 && this.fileBytes + bytes > maxBytes) {
+      renameSync(filePath, `${filePath}${ROTATED_SUFFIX}`);
+      this.fileBytes = 0;
+    }
+
+    appendFileSync(filePath, serialized, { encoding: 'utf8', mode: AUDIT_FILE_MODE });
+    this.fileBytes += bytes;
+  }
+
+  /**
+   * Reads the size of an existing log, and tightens its permissions if a previous run left
+   * them wider. A file owned by another account cannot be chmod'ed, and that must not stop
+   * the server from recording — the write itself is what matters.
+   */
+  private adoptExistingFile(filePath: string): number {
+    let size = 0;
+    try {
+      const stats = statSync(filePath);
+      size = stats.size;
+      if ((stats.mode & 0o777) !== AUDIT_FILE_MODE) chmodSync(filePath, AUDIT_FILE_MODE);
+    } catch {
+      // No file yet, or permissions that cannot be changed from here.
+    }
+    return size;
   }
 }

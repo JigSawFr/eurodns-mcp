@@ -1,6 +1,6 @@
 import { openSync, readSync, fstatSync, closeSync } from 'node:fs';
 import type { RiskClass } from './constants.js';
-import type { AuditVerdict } from './audit.js';
+import { ROTATED_SUFFIX, type AuditVerdict } from './audit.js';
 
 /** One line of the audit log, as written by AuditLogger. */
 export interface AuditEntry {
@@ -54,11 +54,11 @@ export function queryAuditLog(
   query: AuditQuery,
   windowBytes: number = READ_WINDOW_BYTES,
 ): AuditQueryResult {
-  const { text, truncated } = readTail(filePath, windowBytes);
+  const { text, partialFirstLine, moreBehind } = readTail(filePath, windowBytes);
 
   const lines = text.split('\n').filter((line) => line !== '');
   // A window that starts mid-file almost always begins inside a line; drop that fragment.
-  const usable = truncated ? lines.slice(1) : lines;
+  const usable = partialFirstLine ? lines.slice(1) : lines;
 
   const entries: AuditEntry[] = [];
   let scanned = 0;
@@ -80,7 +80,7 @@ export function queryAuditLog(
     }
   }
 
-  return { entries, scanned, truncated };
+  return { entries, scanned, truncated: moreBehind };
 }
 
 function matches(entry: AuditEntry, query: AuditQuery): boolean {
@@ -95,14 +95,68 @@ function matches(entry: AuditEntry, query: AuditQuery): boolean {
   return true;
 }
 
-/** Reads at most `windowBytes` from the end of the file. */
-function readTail(filePath: string, windowBytes: number): { text: string; truncated: boolean } {
+/**
+ * Reads at most `windowBytes` of the log, newest first, spanning the rotated generation.
+ *
+ * The writer rotates the file to `<file>.1` at its size ceiling. Reading only the current
+ * file would make the history silently forget everything before the last rotation, and
+ * report `truncated: false` while doing it — worse than an empty answer, because it looks
+ * complete. So whatever budget the current file leaves is spent on the rotated one.
+ */
+function readTail(filePath: string, windowBytes: number): WindowRead {
+  const current = readFileTail(filePath, windowBytes);
+  if (!current.reachedStart) {
+    return { text: current.text, partialFirstLine: true, moreBehind: true };
+  }
+
+  const remaining = windowBytes - Buffer.byteLength(current.text, 'utf8');
+  const rotatedPath = `${filePath}${ROTATED_SUFFIX}`;
+
+  // No budget left to look behind, but the whole current file is intact and starts on a
+  // line boundary — so nothing to drop, even though older entries may exist.
+  if (remaining <= 0) {
+    return {
+      text: current.text,
+      partialFirstLine: false,
+      moreBehind: readFileTail(rotatedPath, 0).exists,
+    };
+  }
+
+  const rotated = readFileTail(rotatedPath, remaining);
+  if (!rotated.exists) {
+    return { text: current.text, partialFirstLine: false, moreBehind: false };
+  }
+
+  // Every line ends with a newline, so plain concatenation keeps them intact.
+  return {
+    text: rotated.text + current.text,
+    partialFirstLine: !rotated.reachedStart,
+    moreBehind: !rotated.reachedStart,
+  };
+}
+
+interface WindowRead {
+  text: string;
+  /** The window began mid-line, so the first line is a fragment to discard. */
+  partialFirstLine: boolean;
+  /** Entries exist before the window. */
+  moreBehind: boolean;
+}
+
+interface TailRead {
+  text: string;
+  /** False when the read started past the beginning of the file. */
+  reachedStart: boolean;
+  exists: boolean;
+}
+
+function readFileTail(filePath: string, windowBytes: number): TailRead {
   let fd: number;
   try {
     fd = openSync(filePath, 'r');
   } catch {
     // No log file yet simply means nothing has been recorded.
-    return { text: '', truncated: false };
+    return { text: '', reachedStart: true, exists: false };
   }
 
   try {
@@ -111,7 +165,7 @@ function readTail(filePath: string, windowBytes: number): { text: string; trunca
     const start = size - length;
     const buffer = Buffer.alloc(length);
     readSync(fd, buffer, 0, length, start);
-    return { text: buffer.toString('utf8'), truncated: start > 0 };
+    return { text: buffer.toString('utf8'), reachedStart: start === 0, exists: true };
   } finally {
     closeSync(fd);
   }
