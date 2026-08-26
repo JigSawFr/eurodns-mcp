@@ -1,0 +1,45 @@
+# Changelog
+
+## [0.2.0](https://github.com/JigSawFr/eurodns-mcp/compare/v0.1.0...v0.2.0) (2026-08-26)
+
+
+### ⚠ BREAKING CHANGES
+
+* the server now speaks MCP 2026-07-28. 2025-era clients are still served.
+* Node 20 is no longer supported. The minimum is now Node 22.
+
+### Features
+
+* add deployment artifacts, semver releases and image publishing ([bc6bc18](https://github.com/JigSawFr/eurodns-mcp/commit/bc6bc189eed67d9a19007bf93645930fcdb4c400))
+* **audit:** chain each log line to the one before it ([3ee3066](https://github.com/JigSawFr/eurodns-mcp/commit/3ee30667e13647307354e87024f5a84d47a4cb9b))
+* **ci:** cut releases with release-please and publish images to ghcr ([75b8409](https://github.com/JigSawFr/eurodns-mcp/commit/75b840966379ce68a80937c11c6039ee649bdb43))
+* **deploy:** add container and platform deployment artifacts ([4bda03b](https://github.com/JigSawFr/eurodns-mcp/commit/4bda03bcb9bcf62d527e1eb7755709efc3dc27de))
+* **http:** expose Prometheus metrics behind their own token ([2eaaa0e](https://github.com/JigSawFr/eurodns-mcp/commit/2eaaa0e8f75db1f470b41b5bb3e970ea3c94b7b6))
+* **http:** rate limit the MCP endpoint ([97424fc](https://github.com/JigSawFr/eurodns-mcp/commit/97424fc018adee845ddcf2629e49b8cb42f6b3b3))
+* make the audit log tamper-evident and shippable, and expose metrics ([8c77785](https://github.com/JigSawFr/eurodns-mcp/commit/8c777857dcf71b5f247e9aa0007e76e1f60e4fef))
+* raise the runtime floor to Node 22 and run the image on Node 24 ([ed9d16e](https://github.com/JigSawFr/eurodns-mcp/commit/ed9d16eb0ce8bdff855bb436b5abbb036d5392c4))
+* speak the 2026-07-28 protocol revision, and still serve 2025 clients ([598300a](https://github.com/JigSawFr/eurodns-mcp/commit/598300a17a3f59d54849db5dfd8e0f292c8ba18e))
+
+
+### Bug fixes
+
+* accept zod 4 alongside zod 3 ([1e82e15](https://github.com/JigSawFr/eurodns-mcp/commit/1e82e159a7cee518dddf69db3c9b7056d53d107b))
+* **audit:** restrict the log to its owner and bound its growth ([a89acaa](https://github.com/JigSawFr/eurodns-mcp/commit/a89acaa518d9e42b3c71e54299d52f37077b11c4))
+* **auth:** fail closed when a request carries no verified identity ([25ea075](https://github.com/JigSawFr/eurodns-mcp/commit/25ea075eb9fd7f73498e8612146ed078d000877f))
+* **auth:** state the accepted token signature algorithms ([787a980](https://github.com/JigSawFr/eurodns-mcp/commit/787a98066cdc150c9d8e2576521bdfb7350c9cb0))
+* **ci:** give CodeQL the actions:read scope its upload needs ([1ed2bda](https://github.com/JigSawFr/eurodns-mcp/commit/1ed2bda8bd8c3aa55d312a699517787a7be6bb3a))
+* **ci:** mask the test token so it stays out of public job logs ([b70ae15](https://github.com/JigSawFr/eurodns-mcp/commit/b70ae1543e4267a816f84483bf0ef100c0d2bd37))
+* **ci:** read both response shapes, and assert the modern path ([b50eb2c](https://github.com/JigSawFr/eurodns-mcp/commit/b50eb2c619e98b8e941fbc41ae1c857106b9332a))
+* **ci:** run CodeQL only where code scanning can accept its results ([6807bc9](https://github.com/JigSawFr/eurodns-mcp/commit/6807bc96d7284903d381013a5a9e2014d4cf3bf4))
+* **ci:** stop the generated changelog from failing the format check ([#25](https://github.com/JigSawFr/eurodns-mcp/issues/25)) ([eeedd9e](https://github.com/JigSawFr/eurodns-mcp/commit/eeedd9ebd5a4b8c81055f12ef76f51048349d921))
+* **docs:** stop promising an npm package that does not exist ([faa2d9b](https://github.com/JigSawFr/eurodns-mcp/commit/faa2d9b639a91ae48cdcde11296aa29d4b6f3214))
+* harden authentication, the audit log and the build chain ([ab3155c](https://github.com/JigSawFr/eurodns-mcp/commit/ab3155cf55b699b672daefd935e6f455cadf5c01))
+* **http:** reduce what an unauthenticated caller can reach ([75ffe8d](https://github.com/JigSawFr/eurodns-mcp/commit/75ffe8d1775e35df406e4b48c6f792b44099d475))
+
+
+### Documentation
+
+* add the governance a public repository needs ([ad5aa02](https://github.com/JigSawFr/eurodns-mcp/commit/ad5aa0287a8d482c2144605f977841ce808b7777))
+* document shipping the audit log and polling the metrics ([e0dfeb2](https://github.com/JigSawFr/eurodns-mcp/commit/e0dfeb2b2f07d0fc626870690294483e299be4a5))
+* document the new settings and the container hardening ([dfe24cb](https://github.com/JigSawFr/eurodns-mcp/commit/dfe24cb7eb27799c214ed80707f6041311174b22))
+* require squash merges so the changelog lists a change once ([#24](https://github.com/JigSawFr/eurodns-mcp/issues/24)) ([4f63ddc](https://github.com/JigSawFr/eurodns-mcp/commit/4f63ddc57c6adcc3d8508785657c10f5adecb755))
