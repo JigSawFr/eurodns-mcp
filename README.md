@@ -7,6 +7,9 @@ tools, so an MCP client can manage them in natural language.
 > This is an independent open-source project. It is **not affiliated with, endorsed by, or
 > supported by EuroDNS**. "EuroDNS" is used only to identify the API this server talks to.
 
+> Written by a professional engineer with AI assistance. Every line was reviewed before it
+> was committed, and the responsibility for what it does is human.
+
 ## What you get
 
 - **Full API coverage** — 79 tools generated from the OpenAPI document, across 17 areas.
