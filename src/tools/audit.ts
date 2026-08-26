@@ -68,6 +68,12 @@ export function registerAuditTools(server: McpServer, context: ToolContext): num
         returned: z.number().int(),
         scanned: z.number().int(),
         truncated: z.boolean(),
+        chain: z.object({
+          intact: z.boolean(),
+          verified: z.number().int(),
+          brokenAt: z.number().int().optional(),
+          segments: z.number().int(),
+        }),
       },
       annotations: {
         readOnlyHint: true,
@@ -139,12 +145,27 @@ export function registerAuditTools(server: McpServer, context: ToolContext): num
         returned: result.entries.length,
         scanned: result.scanned,
         truncated: result.truncated,
+        chain: result.chain,
       };
 
       const rendered = formatJson(structured, context.config.upstream.characterLimit);
-      const note = result.truncated
-        ? '\n\nOlder entries exist beyond the read window. Narrow the time range to reach them.'
-        : '';
+      const notes: string[] = [];
+      if (result.truncated) {
+        notes.push(
+          'Older entries exist beyond the read window. Narrow the time range to reach them.',
+        );
+      }
+      // Said in prose as well as in the structured result: an agent summarising this for a
+      // person must not present a tampered log as an ordinary answer.
+      if (!result.chain.intact) {
+        notes.push(
+          'WARNING: the audit log fails its integrity check. A line was altered or removed ' +
+            `after it was written${
+              result.chain.brokenAt === undefined ? '' : `, at sequence ${result.chain.brokenAt}`
+            }. Treat this history as unreliable and investigate.`,
+        );
+      }
+      const note = notes.length > 0 ? `\n\n${notes.join('\n\n')}` : '';
 
       return {
         content: [{ type: 'text' as const, text: rendered.text + note }],

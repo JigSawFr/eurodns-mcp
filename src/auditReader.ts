@@ -1,6 +1,6 @@
 import { openSync, readSync, fstatSync, closeSync } from 'node:fs';
-import type { RiskClass } from './constants.js';
-import { ROTATED_SUFFIX, type AuditVerdict } from './audit.js';
+import { ROTATED_SUFFIX, type RiskClass } from './constants.js';
+import { hashLine, type AuditVerdict } from './audit.js';
 
 /** One line of the audit log, as written by AuditLogger. */
 export interface AuditEntry {
@@ -16,6 +16,27 @@ export interface AuditEntry {
   reason?: string;
   durationMs?: number;
   params?: Record<string, unknown>;
+  /** Ordinal of this line in the chain. */
+  seq?: number;
+  /** Hash of the previous line, or null at the start of a chain segment. */
+  prev?: string | null;
+}
+
+/**
+ * Whether the lines in the window still hash to what the next line claims.
+ *
+ * `intact` false means a line was altered or removed after it was written. It says nothing
+ * about lines cut from the end of the log: a shorter valid chain is still valid, which is
+ * why a copy shipped off the host complements this rather than duplicating it.
+ */
+export interface ChainStatus {
+  intact: boolean;
+  /** Links checked. Zero when the window holds fewer than two lines. */
+  verified: number;
+  /** `seq` of the first line whose `prev` did not match. */
+  brokenAt?: number;
+  /** Restarts seen in the window: a segment boundary, not a break. */
+  segments: number;
 }
 
 export interface AuditQuery {
@@ -37,6 +58,8 @@ export interface AuditQueryResult {
   scanned: number;
   /** True when the read window did not reach the start of the file. */
   truncated: boolean;
+  /** Integrity of the hash chain over the whole window, not only the filtered entries. */
+  chain: ChainStatus;
 }
 
 /**
@@ -80,7 +103,53 @@ export function queryAuditLog(
     }
   }
 
-  return { entries, scanned, truncated: moreBehind };
+  return { entries, scanned, truncated: moreBehind, chain: verifyChain(usable) };
+}
+
+/**
+ * Walks the window forwards and checks each line against the hash its successor recorded.
+ *
+ * Verification covers every line in the window, not the filtered result: a query for one
+ * domain must still notice that the log around it was edited. The first line is never
+ * checkable — whatever it points at lies outside the window — so a window of one line is
+ * reported as intact with nothing verified, which is the honest answer.
+ */
+export function verifyChain(lines: string[]): ChainStatus {
+  let verified = 0;
+  let segments = 0;
+
+  for (let index = 1; index < lines.length; index += 1) {
+    const raw = lines[index] as string;
+    let entry: { seq?: number; prev?: string | null };
+    try {
+      entry = JSON.parse(raw) as { seq?: number; prev?: string | null };
+    } catch {
+      continue;
+    }
+
+    // A line written before chaining existed carries no `prev`; there is nothing to check
+    // and nothing to accuse it of.
+    if (entry.prev === undefined) continue;
+
+    if (entry.prev === null) {
+      // The process restarted here. On a stream that is expected — it cannot see what a
+      // previous run wrote — so the chain resumes rather than breaks.
+      segments += 1;
+      continue;
+    }
+
+    if (entry.prev !== hashLine(lines[index - 1] as string)) {
+      return {
+        intact: false,
+        verified,
+        segments,
+        ...(entry.seq === undefined ? {} : { brokenAt: entry.seq }),
+      };
+    }
+    verified += 1;
+  }
+
+  return { intact: true, verified, segments };
 }
 
 function matches(entry: AuditEntry, query: AuditQuery): boolean {
