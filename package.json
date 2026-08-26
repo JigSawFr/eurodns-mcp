@@ -45,7 +45,8 @@
     "test:watch": "vitest",
     "lint": "eslint . --max-warnings 0",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@modelcontextprotocol/express": "^2.0.0",
@@ -62,6 +63,7 @@
     "@types/supertest": "^7.2.1",
     "@typescript-eslint/eslint-plugin": "^8.20.0",
     "@typescript-eslint/parser": "^8.20.0",
+    "@vitest/coverage-v8": "^4.1.11",
     "eslint": "^10.9.0",
     "prettier": "^3.4.2",
     "supertest": "^7.2.2",

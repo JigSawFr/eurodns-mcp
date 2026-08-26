@@ -1,0 +1,107 @@
+name: OpenAPI drift
+
+# The whole tool surface is generated from spec/openapi.json, so the vendor changing their
+# document under us is a silent event: nothing breaks, the server simply stops describing
+# the API it talks to. This notices.
+#
+# Deliberately not part of the pull-request CI. A check that depends on a third party being
+# reachable would make every unrelated pull request intermittently red, which is how a
+# signal gets ignored.
+
+on:
+  schedule:
+    # Monday morning: a drift lands with a full week to act on it.
+    - cron: '23 5 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - id: compare
+        name: Compare the vendored document against the published one
+        run: |
+          # A network failure is not drift. Fail the step loudly rather than opening an
+          # issue that blames the vendor for our own connectivity.
+          curl -fsS --retry 3 --retry-delay 5 --max-time 60 \
+            -o /tmp/live-openapi.json https://docapi.eurodns.com/openapi.json
+
+          vendored=$(sha256sum spec/openapi.json | cut -d' ' -f1)
+          live=$(sha256sum /tmp/live-openapi.json | cut -d' ' -f1)
+          echo "vendored: $vendored"
+          echo "live:     $live"
+
+          if [ "$vendored" = "$live" ]; then
+            echo "drifted=false" >> "$GITHUB_OUTPUT"
+            echo "The vendored document matches upstream."
+          else
+            echo "drifted=true" >> "$GITHUB_OUTPUT"
+            echo "live_sha=$live" >> "$GITHUB_OUTPUT"
+            {
+              echo 'summary<<EOF'
+              echo "vendored sha256: \`$vendored\`"
+              echo "upstream sha256: \`$live\`"
+              echo
+              echo 'Operation counts:'
+              python3 - <<'PY'
+          import json
+          for label, path in (('vendored', 'spec/openapi.json'), ('upstream', '/tmp/live-openapi.json')):
+              doc = json.load(open(path))
+              ops = sum(1 for p in doc.get('paths', {}).values()
+                        for m in p if m.lower() in ('get', 'post', 'put', 'patch', 'delete'))
+              print(f'- {label}: {ops} operations, info.version {doc["info"].get("version")}')
+          PY
+              echo EOF
+            } >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Open an issue naming what moved
+        if: steps.compare.outputs.drifted == 'true'
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        with:
+          script: |
+            const body = [
+              'The EuroDNS OpenAPI document published at',
+              '`https://docapi.eurodns.com/openapi.json` no longer matches the copy vendored',
+              'in `spec/openapi.json`.',
+              '',
+              process.env.SUMMARY,
+              '',
+              'The tool surface is generated from the vendored copy, so until it is refreshed',
+              'the server describes an API that has moved. To take the change:',
+              '',
+              '```bash',
+              'curl -fsS -o spec/openapi.json https://docapi.eurodns.com/openapi.json',
+              'npm run gen',
+              'npm run typecheck && npm test',
+              '```',
+              '',
+              'Review the regenerated `src/generated/` diff before committing: a new or removed',
+              'operation changes the tool surface, and a renamed one changes a tool name.',
+            ].join('\n');
+
+            const title = 'OpenAPI document drifted upstream';
+            const open = await github.rest.issues.listForRepo({
+              owner: context.repo.owner, repo: context.repo.repo,
+              state: 'open', labels: 'spec-drift',
+            });
+            // One issue per drift, not one per week: reopening the same report every Monday
+            // is how it stops being read.
+            if (open.data.length > 0) {
+              core.info(`Issue #${open.data[0].number} is already open; leaving it alone.`);
+              return;
+            }
+            await github.rest.issues.create({
+              owner: context.repo.owner, repo: context.repo.repo,
+              title, body, labels: ['spec-drift'],
+            });
+        env:
+          SUMMARY: ${{ steps.compare.outputs.summary }}

@@ -39,7 +39,9 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run format:check
-      - run: npm test
+      # Runs the suite and enforces the coverage floors in one pass — coverage has to run
+      # the tests anyway, so a separate `npm test` step would only run them twice.
+      - run: npm run coverage
 
   # release-please reads Conventional Commit subjects. A non-conforming subject produces no
   # release and says nothing about it, so the convention is checked before it reaches main.
