@@ -1,8 +1,13 @@
 name: Release Please
 
 # Accumulates a release PR from Conventional Commit subjects. Merging that PR bumps the
-# version, writes CHANGELOG.md, tags, and publishes a GitHub Release — which is what the
-# image workflow triggers on.
+# version, writes CHANGELOG.md, tags, and publishes a GitHub Release — and then calls the
+# image workflow directly.
+#
+# Calling it is not a stylistic choice. The Release is created with the default GITHUB_TOKEN,
+# and GitHub raises no workflow run from an event that token created, so an image workflow
+# listening for `release: published` never starts. Chaining on this job's own output is the
+# fix that needs no personal access token.
 #
 # The failure mode to know about is silent: a commit whose subject does not follow the
 # convention contributes nothing, and no release appears. The PR-title check in ci.yml
@@ -19,8 +24,27 @@ permissions:
 jobs:
   release-please:
     runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
-      - uses: googleapis/release-please-action@5c625bfb5d1ff62eadeeb3772007f7f66fdcf071 # v4
+      - id: release
+        uses: googleapis/release-please-action@5c625bfb5d1ff62eadeeb3772007f7f66fdcf071 # v4
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+
+  publish-image:
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    # Granted here rather than at the top of the file: the release job needs to write
+    # contents and pull requests, this one needs to write packages, and neither should
+    # carry the other's rights. A called workflow cannot hold more than its caller.
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    uses: ./.github/workflows/release-image.yml
+    with:
+      tag: ${{ needs.release-please.outputs.tag_name }}
