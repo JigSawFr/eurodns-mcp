@@ -1,8 +1,7 @@
 import type { NextFunction, Request, Response } from 'express';
 // Brings in the SDK's `Request.auth` declaration merging.
 import type {} from '@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js';
-import type { RiskClass } from '../constants.js';
-import { scopeForRisk } from './scopes.js';
+import type { ToolRequirement } from '../tools/registry.js';
 
 interface JsonRpcCall {
   method?: string;
@@ -29,7 +28,7 @@ function calledTools(body: unknown): string[] {
  * the per-tool check inside the handler — the handler check remains as a second line, and
  * is the only one that applies on stdio.
  */
-export function scopeGate(riskIndex: Map<string, RiskClass>) {
+export function scopeGate(requirements: Map<string, ToolRequirement>) {
   return (req: Request, res: Response, next: NextFunction): void => {
     const granted = req.auth?.scopes;
     if (!granted) {
@@ -39,10 +38,9 @@ export function scopeGate(riskIndex: Map<string, RiskClass>) {
 
     const missing = new Set<string>();
     for (const tool of calledTools(req.body)) {
-      const risk = riskIndex.get(tool);
-      if (!risk) continue;
-      const required = scopeForRisk(risk);
-      if (!granted.includes(required)) missing.add(required);
+      const requirement = requirements.get(tool);
+      if (!requirement) continue;
+      if (!granted.includes(requirement.scope)) missing.add(requirement.scope);
     }
 
     if (missing.size === 0) {

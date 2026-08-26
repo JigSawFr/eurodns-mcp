@@ -3,6 +3,7 @@ import { userInfo } from 'node:os';
 import { AuditLogger, type AuditActor } from './audit.js';
 import type { Config } from './config.js';
 import { EuroDnsClient, type FetchLike } from './services/client.js';
+import { registerAuditTools } from './tools/audit.js';
 import { registerDnsTools } from './tools/dns.js';
 import { registerGeneratedTools } from './tools/registry.js';
 import type { ToolContext } from './tools/context.js';
@@ -56,6 +57,7 @@ export function buildServer(options: BuildOptions): BuiltServer {
 
   const generated = registerGeneratedTools(server, context);
   const dns = registerDnsTools(server, context);
+  const audit = registerAuditTools(server, context);
 
-  return { server, context, toolCount: generated + dns };
+  return { server, context, toolCount: generated + dns + audit };
 }

@@ -24,11 +24,16 @@ export type GuardrailDecision =
  * operator can shut a whole risk class off without touching the identity provider.
  * `grantedScopes` is undefined when the transport carries no identity (stdio, static
  * token), in which case gate 1 is the only one that applies.
+ *
+ * `requiredScope` overrides the scope derived from the risk class. Most tools need the
+ * scope of their risk class, but a few — reading the audit log — are gated on something
+ * else entirely.
  */
 export function evaluateGuardrails(
   risk: RiskClass,
   guardrails: GuardrailConfig,
   grantedScopes?: string[],
+  requiredScope?: string,
 ): GuardrailDecision {
   if (guardrails.readOnly && risk !== 'read') {
     return {
@@ -61,7 +66,7 @@ export function evaluateGuardrails(
   }
 
   if (grantedScopes !== undefined) {
-    const required = scopeForRisk(risk);
+    const required = requiredScope ?? scopeForRisk(risk);
     if (!grantedScopes.includes(required)) {
       return {
         allowed: false,

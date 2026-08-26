@@ -6,13 +6,14 @@ import {
   type GeneratedOperation,
   type GeneratedParameter,
 } from '../generated/operations.js';
-import { evaluateGuardrails } from '../auth/scopes.js';
+import { evaluateGuardrails, scopeForRisk } from '../auth/scopes.js';
 import { EuroDnsApiError, EuroDnsTransportError } from '../services/errors.js';
 import { formatJson, redactForAudit } from '../services/format.js';
 import { toolNameFor } from './naming.js';
 import { describeOperation } from './overrides.js';
 import type { CallerIdentity, ToolContext } from './context.js';
-import type { RiskClass } from '../constants.js';
+import { AUDIT_SCOPE, type RiskClass } from '../constants.js';
+import { AUDIT_QUERY_TOOL_NAME } from './auditNames.js';
 
 /** `domain-name` -> `domainName`, so tool arguments read like ordinary parameters. */
 export function toCamelCase(value: string): string {
@@ -123,23 +124,40 @@ export function identityFrom(context: ToolContext, authInfo?: AuthInfo): CallerI
   };
 }
 
+/** What a tool costs and what authorises it. */
+export interface ToolRequirement {
+  risk: RiskClass;
+  scope: string;
+}
+
 /**
- * Risk class of the hand-written tools, which have no generated operation to derive from.
+ * Requirements of the hand-written tools, which have no generated operation to derive from.
+ *
+ * Most tools need the scope of their risk class, so only the exceptions carry an explicit
+ * scope: reading the audit log is a read, but of who did what rather than of EuroDNS data.
  */
-export const HAND_WRITTEN_TOOL_RISKS: Record<string, RiskClass> = {
-  eurodns_dns_upsert_record: 'write',
-  eurodns_dns_delete_record: 'write',
-  eurodns_dns_diff_zone: 'read',
+export const HAND_WRITTEN_TOOL_REQUIREMENTS: Record<string, ToolRequirement> = {
+  eurodns_dns_upsert_record: { risk: 'write', scope: scopeForRisk('write') },
+  eurodns_dns_delete_record: { risk: 'write', scope: scopeForRisk('write') },
+  eurodns_dns_diff_zone: { risk: 'read', scope: scopeForRisk('read') },
+  [AUDIT_QUERY_TOOL_NAME]: { risk: 'read', scope: AUDIT_SCOPE },
 };
 
 /**
- * Tool name to risk class, for callers that must decide before dispatch — the HTTP scope
- * gate needs to know what a call requires before the tool handler ever runs.
+ * Tool name to its requirement, for callers that must decide before dispatch — the HTTP
+ * scope gate needs to know what a call requires before the tool handler ever runs.
  */
-export function toolRiskIndex(): Map<string, RiskClass> {
-  const index = new Map<string, RiskClass>();
-  for (const operation of OPERATIONS) index.set(toolNameFor(operation), operation.risk);
-  for (const [name, risk] of Object.entries(HAND_WRITTEN_TOOL_RISKS)) index.set(name, risk);
+export function toolScopeIndex(): Map<string, ToolRequirement> {
+  const index = new Map<string, ToolRequirement>();
+  for (const operation of OPERATIONS) {
+    index.set(toolNameFor(operation), {
+      risk: operation.risk,
+      scope: scopeForRisk(operation.risk),
+    });
+  }
+  for (const [name, requirement] of Object.entries(HAND_WRITTEN_TOOL_REQUIREMENTS)) {
+    index.set(name, requirement);
+  }
   return index;
 }
 
