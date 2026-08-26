@@ -15,7 +15,6 @@
 * **ci:** cut releases with release-please and publish images to ghcr ([75b8409](https://github.com/JigSawFr/eurodns-mcp/commit/75b840966379ce68a80937c11c6039ee649bdb43))
 * **deploy:** add container and platform deployment artifacts ([4bda03b](https://github.com/JigSawFr/eurodns-mcp/commit/4bda03bcb9bcf62d527e1eb7755709efc3dc27de))
 * **http:** expose Prometheus metrics behind their own token ([2eaaa0e](https://github.com/JigSawFr/eurodns-mcp/commit/2eaaa0e8f75db1f470b41b5bb3e970ea3c94b7b6))
-* **http:** rate limit the MCP endpoint ([df0bff3](https://github.com/JigSawFr/eurodns-mcp/commit/df0bff3e867db0d80e2f8c222595a8394934134b))
 * **http:** rate limit the MCP endpoint ([97424fc](https://github.com/JigSawFr/eurodns-mcp/commit/97424fc018adee845ddcf2629e49b8cb42f6b3b3))
 * make the audit log tamper-evident and shippable, and expose metrics ([8c77785](https://github.com/JigSawFr/eurodns-mcp/commit/8c777857dcf71b5f247e9aa0007e76e1f60e4fef))
 * raise the runtime floor to Node 22 and run the image on Node 24 ([ed9d16e](https://github.com/JigSawFr/eurodns-mcp/commit/ed9d16eb0ce8bdff855bb436b5abbb036d5392c4))
@@ -40,7 +39,6 @@
 
 ### Documentation
 
-* add the governance a public repository needs ([2f9cd62](https://github.com/JigSawFr/eurodns-mcp/commit/2f9cd6289ef180b14f304b76773b3a129c3808d6))
 * add the governance a public repository needs ([ad5aa02](https://github.com/JigSawFr/eurodns-mcp/commit/ad5aa0287a8d482c2144605f977841ce808b7777))
 * document shipping the audit log and polling the metrics ([e0dfeb2](https://github.com/JigSawFr/eurodns-mcp/commit/e0dfeb2b2f07d0fc626870690294483e299be4a5))
 * document the new settings and the container hardening ([dfe24cb](https://github.com/JigSawFr/eurodns-mcp/commit/dfe24cb7eb27799c214ed80707f6041311174b22))
