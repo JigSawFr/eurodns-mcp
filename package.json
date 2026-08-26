@@ -21,7 +21,7 @@
   "homepage": "https://github.com/JigSawFr/eurodns-mcp#readme",
   "type": "module",
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "bin": {
     "eurodns-mcp": "dist/index.js",
