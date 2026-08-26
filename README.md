@@ -337,6 +337,21 @@ Set `EURODNS_AUDIT_DESTINATION` to `stderr` (default), `stdout`, `file` (with
 `EURODNS_AUDIT_FILE`) or `none`. `stdout` is refused under stdio, where it carries the
 JSON-RPC stream.
 
+### Tamper-evidence
+
+Every line carries `seq`, its ordinal, and `prev`, the SHA-256 of the line before it. Editing
+or removing a line in the middle breaks the chain at the next one, and `eurodns_audit_query`
+says so — `chain.intact` false, `chain.brokenAt` naming the sequence number — in its result
+and in prose, so an agent summarising the history cannot present a tampered log as an
+ordinary answer.
+
+What it does not catch is the log being cut short at the end: a shorter valid chain is still
+valid. Shipping the lines to a collector as they are written is the answer to that, and the
+two measures complement each other rather than overlapping. On a stream the chain restarts at
+each process start, marked `prev: null`, since the process cannot see what a previous run
+wrote; with a file it resumes where it stopped. See
+[deploy/README.md](deploy/README.md#shipping-the-audit-log-to-a-siem).
+
 ### Asking the server what happened
 
 With `EURODNS_AUDIT_QUERY` set, a `eurodns_audit_query` tool answers questions about past
@@ -388,6 +403,7 @@ result says so, so you narrow the time range instead of concluding you have seen
 | `EURODNS_MCP_PUBLIC_URL`      | —                              | Canonical public URL; also the default OAuth audience.   |
 | `EURODNS_ALLOWED_ORIGINS`     | —                              | Comma-separated origins allowed to call the server.      |
 | `EURODNS_MAX_BODY_BYTES`      | `1048576`                      | Largest JSON body accepted, checked before auth.         |
+| `EURODNS_METRICS_TOKEN`       | —                              | Enables `GET /metrics` and is the bearer it requires.    |
 | `EURODNS_OAUTH_ISSUER`        | —                              | Authorization server issuer.                             |
 | `EURODNS_OAUTH_AUDIENCE`      | `EURODNS_MCP_PUBLIC_URL`       | Expected `aud` claim.                                    |
 | `EURODNS_OAUTH_JWKS_URI`      | discovered                     | Overrides JWKS discovery.                                |

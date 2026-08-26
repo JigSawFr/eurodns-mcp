@@ -1,16 +1,63 @@
-import { appendFileSync, chmodSync, renameSync, statSync } from 'node:fs';
-import { randomUUID } from 'node:crypto';
+import {
+  appendFileSync,
+  chmodSync,
+  closeSync,
+  openSync,
+  readSync,
+  renameSync,
+  statSync,
+} from 'node:fs';
+import { createHash, randomUUID } from 'node:crypto';
 import type { AuditConfig } from './config.js';
-import type { RiskClass } from './constants.js';
+import { AUDIT_FILE_MODE, ROTATED_SUFFIX, type RiskClass } from './constants.js';
+import type { MetricsRegistry } from './metrics.js';
+
+export { AUDIT_FILE_MODE, ROTATED_SUFFIX };
+
+/** Bytes read from the end of the log to recover where the hash chain left off. */
+const TAIL_PROBE_BYTES = 64 * 1024;
+
+/** SHA-256 of a line exactly as it was written, without the trailing newline. */
+export function hashLine(serialized: string): string {
+  return createHash('sha256').update(serialized, 'utf8').digest('hex');
+}
 
 /**
- * Permissions for the audit file.
+ * Reads the last complete line of a file, or undefined when there is none.
  *
- * This is the only record attributing a DNS change to a person, so it should not be
- * readable by every account on the host. The suffix a rotated generation takes.
+ * Only the tail is read: the log grows without bound between rotations, and this runs once
+ * at startup to find where the chain stopped. A line longer than the probe window would be
+ * missed, which redacted audit lines — scalars only — never approach.
  */
-export const AUDIT_FILE_MODE = 0o600;
-export const ROTATED_SUFFIX = '.1';
+function readLastLine(filePath: string): string | undefined {
+  let fd: number;
+  try {
+    fd = openSync(filePath, 'r');
+  } catch {
+    return undefined;
+  }
+
+  try {
+    const size = statSync(filePath).size;
+    if (size === 0) return undefined;
+
+    const length = Math.min(size, TAIL_PROBE_BYTES);
+    const buffer = Buffer.alloc(length);
+    readSync(fd, buffer, 0, length, size - length);
+
+    // Every write ends with a newline, so the final element is empty and the one before it
+    // is a complete line even when the window opened mid-file.
+    const lines = buffer
+      .toString('utf8')
+      .split('\n')
+      .filter((line) => line !== '');
+    return lines.at(-1);
+  } catch {
+    return undefined;
+  } finally {
+    closeSync(fd);
+  }
+}
 
 /**
  * Who performed an action. The upstream API sees a single shared API key for every
@@ -54,12 +101,17 @@ export interface AuditSpan {
 export class AuditLogger {
   private readonly config: AuditConfig;
   private readonly now: () => number;
+  private readonly metrics: MetricsRegistry | undefined;
   /** Bytes in the current log file. Read from disk once, then tracked. */
   private fileBytes: number | undefined;
+  /** Hash of the last line written, which the next line records as its `prev`. */
+  private prevHash: string | null | undefined;
+  private seq: number | undefined;
 
-  constructor(config: AuditConfig, now: () => number = Date.now) {
+  constructor(config: AuditConfig, now: () => number = Date.now, metrics?: MetricsRegistry) {
     this.config = config;
     this.now = now;
+    this.metrics = metrics;
   }
 
   /**
@@ -83,6 +135,7 @@ export class AuditLogger {
       complete: (outcome: AuditOutcome) => {
         if (settled) return;
         settled = true;
+        const durationMs = this.now() - startedAt;
         this.write({
           ...this.baseLine(correlationId, context),
           phase: 'completed',
@@ -91,7 +144,19 @@ export class AuditLogger {
             ? {}
             : { upstreamStatus: outcome.upstreamStatus }),
           ...(outcome.reason === undefined ? {} : { reason: outcome.reason }),
-          durationMs: this.now() - startedAt,
+          durationMs,
+        });
+        // Every call passes through here, whatever its outcome, which is what makes this
+        // the one place metrics can be collected without threading a counter through the
+        // tool handlers.
+        this.metrics?.recordCall({
+          tool: context.tool,
+          risk: context.risk,
+          verdict: outcome.verdict,
+          durationMs,
+          ...(outcome.upstreamStatus === undefined
+            ? {}
+            : { upstreamStatus: outcome.upstreamStatus }),
         });
       },
     };
@@ -109,18 +174,37 @@ export class AuditLogger {
     };
   }
 
+  /**
+   * Writes one line, chained to the one before it.
+   *
+   * Each line carries `prev`, the SHA-256 of the previous line exactly as it was written,
+   * and `seq`, its ordinal. Editing or removing a line in the middle of the log breaks the
+   * chain at the next line, so tampering stops being silent — which is what a log has to
+   * offer if it is to be the record of who changed DNS.
+   *
+   * What this does not detect is the log being cut short at the end: a shorter valid chain
+   * is still a valid chain. Shipping the lines off the host as they are written is the
+   * answer to that, and the two measures are complementary rather than alternatives.
+   */
   private write(line: Record<string, unknown>): void {
     if (this.config.destination === 'none') return;
-    const serialized = `${JSON.stringify(line)}\n`;
+
+    if (this.prevHash === undefined) this.resumeChain();
+
+    const serialized = `${JSON.stringify({
+      ...line,
+      seq: (this.seq as number) + 1,
+      prev: this.prevHash,
+    })}\n`;
 
     switch (this.config.destination) {
       case 'stdout':
         // Only reachable over HTTP; the stdio transport rejects this at configuration time.
         process.stdout.write(serialized);
-        return;
+        break;
       case 'stderr':
         process.stderr.write(serialized);
-        return;
+        break;
       case 'file':
         try {
           this.appendToFile(this.config.filePath as string, serialized);
@@ -135,8 +219,38 @@ export class AuditLogger {
             })}\n`,
           );
         }
-        return;
+        break;
     }
+
+    this.prevHash = hashLine(serialized.slice(0, -1));
+    this.seq = (this.seq as number) + 1;
+  }
+
+  /**
+   * Picks the chain back up where the last run left it.
+   *
+   * Only a file can be resumed. On a stream the process has no way to see what it wrote
+   * before, so each start begins a new segment marked by `prev: null` — a verifier reads
+   * that as "a restart happened here", not as a break.
+   */
+  private resumeChain(): void {
+    this.prevHash = null;
+    this.seq = 0;
+
+    if (this.config.destination !== 'file') return;
+
+    const last = readLastLine(this.config.filePath as string);
+    if (last === undefined) return;
+
+    try {
+      const parsed = JSON.parse(last) as { seq?: unknown };
+      if (typeof parsed.seq === 'number') this.seq = parsed.seq;
+    } catch {
+      // A corrupt final line cannot anchor the chain. Start a fresh segment rather than
+      // chaining onto something unparseable — the break stays visible either way.
+      return;
+    }
+    this.prevHash = hashLine(last);
   }
 
   /**
