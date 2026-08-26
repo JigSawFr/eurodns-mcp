@@ -46,6 +46,19 @@ A **named volume** carries the audit log and inherits the right ownership from t
 **bind mount** does not: `chown 1000:1000` the host directory first, or the first
 state-changing call fails to write its log line.
 
+The compose file runs the container with a **read-only root filesystem, no capabilities and
+`no-new-privileges`**. The process writes only to `/data`, binds its port as an
+unprivileged user and never elevates, so none of that is a constraint in practice — it just
+removes the options an attacker would otherwise have after a compromise. On a platform that
+does not expose these settings, the image is still non-root; you lose the sealed filesystem,
+not the user separation.
+
+The audit log is created mode `0600` and rotates to `audit.jsonl.1` at
+`EURODNS_AUDIT_MAX_BYTES` (64 MB by default), keeping two generations. Sizing a volume means
+budgeting for twice that. The history query reads across both, so rotation does not create a
+gap in what the server can answer — but everything before the older generation is gone. If
+that history has to be kept, ship the lines to a collector as well.
+
 ## Fly.io
 
 ```bash

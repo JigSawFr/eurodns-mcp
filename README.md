@@ -377,6 +377,7 @@ result says so, so you narrow the time range instead of concluding you have seen
 | `EURODNS_AUDIT_DESTINATION`   | `stderr`                       | `stderr`, `stdout`, `file`, `none`.                      |
 | `EURODNS_AUDIT_FILE`          | —                              | Required when the destination is `file`.                 |
 | `EURODNS_AUDIT_QUERY`         | `off`                          | `off`, `own` or `all`. Requires the `file` destination.  |
+| `EURODNS_AUDIT_MAX_BYTES`     | `67108864`                     | Size at which the log rotates to `<file>.1`.             |
 | `OP_CONNECT_HOST`             | —                              | 1Password Connect server, when using `op://` references. |
 | `OP_CONNECT_TOKEN`            | —                              | Connect token for that server.                           |
 | `HOST`                        | `127.0.0.1`                    | HTTP bind address.                                       |
@@ -386,11 +387,13 @@ result says so, so you narrow the time range instead of concluding you have seen
 | `EURODNS_MCP_TOKEN_LABEL`     | `static-token`                 | Name recorded in the audit log for that token.           |
 | `EURODNS_MCP_PUBLIC_URL`      | —                              | Canonical public URL; also the default OAuth audience.   |
 | `EURODNS_ALLOWED_ORIGINS`     | —                              | Comma-separated origins allowed to call the server.      |
+| `EURODNS_MAX_BODY_BYTES`      | `1048576`                      | Largest JSON body accepted, checked before auth.         |
 | `EURODNS_OAUTH_ISSUER`        | —                              | Authorization server issuer.                             |
 | `EURODNS_OAUTH_AUDIENCE`      | `EURODNS_MCP_PUBLIC_URL`       | Expected `aud` claim.                                    |
 | `EURODNS_OAUTH_JWKS_URI`      | discovered                     | Overrides JWKS discovery.                                |
 | `EURODNS_OAUTH_SUBJECT_CLAIM` | `sub`                          | Claim recorded as the actor.                             |
 | `EURODNS_OAUTH_SCOPE_CLAIM`   | `scope`, `scp`, `roles`        | Claim carrying scopes.                                   |
+| `EURODNS_OAUTH_ALGORITHMS`    | asymmetric set                 | Signature algorithms accepted. Never includes `HS*`.     |
 
 </details>
 
