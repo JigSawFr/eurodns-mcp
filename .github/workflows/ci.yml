@@ -87,8 +87,9 @@ jobs:
         run: |
           TOKEN=$(openssl rand -hex 32)
           # Without the mask, the value is printed in plain text in every later step's
-          # env block. It is a throwaway secret for a container this job destroys, but
-          # these logs are public and the habit is the thing worth keeping.
+          # env block. It is a throwaway secret for a container this job destroys, and this
+          # repository is private today — but it is meant to be published, and a habit that
+          # only holds while nobody is looking is not one.
           echo "::add-mask::$TOKEN"
           echo "TOKEN=$TOKEN" >> "$GITHUB_ENV"
           docker volume create ci-audit
