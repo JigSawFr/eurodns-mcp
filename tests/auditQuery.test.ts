@@ -160,7 +160,7 @@ describe('eurodns_audit_query tool', () => {
     const { client, close } = await connect({ config: withLog(path, 'all') });
 
     const result = await client.callTool({ name: 'eurodns_audit_query', arguments: {} });
-    const structured = (result as { structuredContent: { entries: { tool: string }[] } })
+    const structured = (result as unknown as { structuredContent: { entries: { tool: string }[] } })
       .structuredContent;
 
     expect(structured.entries[0]?.tool).toBe('eurodns_dns_get_zone');
@@ -176,7 +176,8 @@ describe('eurodns_audit_query tool', () => {
     const { client, close } = await connect({ config: withLog(path, 'own') });
 
     const result = await client.callTool({ name: 'eurodns_audit_query', arguments: {} });
-    const structured = (result as { structuredContent: { entries: unknown[] } }).structuredContent;
+    const structured = (result as unknown as { structuredContent: { entries: unknown[] } })
+      .structuredContent;
 
     expect(structured.entries).toHaveLength(0);
     await close();

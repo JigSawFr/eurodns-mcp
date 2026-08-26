@@ -48,18 +48,18 @@ describe('EuroDNS client', () => {
 
   it('points at the IP allowlist on 403, the usual cause', async () => {
     const { fetchImpl } = stubFetch(() => ({ status: 403, body: { errors: [] } }));
-    const error = await new EuroDnsClient(upstream, fetchImpl)
+    const error = (await new EuroDnsClient(upstream, fetchImpl)
       .request({ method: 'GET', path: '/tlds' })
-      .catch((e: unknown) => e as EuroDnsApiError);
+      .catch((e: unknown) => e)) as EuroDnsApiError;
 
     expect(error.message).toContain('whitelisted');
   });
 
   it('directs a rejected zone save to the validator instead of the generic 400', async () => {
     const { fetchImpl } = stubFetch(() => ({ status: 400, body: { errors: [] } }));
-    const error = await new EuroDnsClient(upstream, fetchImpl)
+    const error = (await new EuroDnsClient(upstream, fetchImpl)
       .request({ method: 'PUT', path: '/dns-zones/example.com', body: {} })
-      .catch((e: unknown) => e as EuroDnsApiError);
+      .catch((e: unknown) => e)) as EuroDnsApiError;
 
     expect(error.message).toContain('Validate it first');
   });
@@ -69,9 +69,9 @@ describe('EuroDNS client', () => {
       status: 400,
       body: { errors: [{ code: 'INSUFFICIENT_PREPAID_BALANCE', title: 'Not enough credit' }] },
     }));
-    const error = await new EuroDnsClient(upstream, fetchImpl)
+    const error = (await new EuroDnsClient(upstream, fetchImpl)
       .request({ method: 'POST', path: '/ssl-subscriptions/create', body: {} })
-      .catch((e: unknown) => e as EuroDnsApiError);
+      .catch((e: unknown) => e)) as EuroDnsApiError;
 
     expect(error.message).toContain('prepaid account has insufficient funds');
   });
