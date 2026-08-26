@@ -164,3 +164,33 @@ describe('deployment guardrails', () => {
     await close();
   });
 });
+
+describe('tool descriptions', () => {
+  it('names every overridden operation, so a rename cannot orphan a description', async () => {
+    const { DESCRIPTION_OVERRIDES } = await import('../src/tools/overrides.js');
+    const known = new Set(OPERATIONS.map((o) => o.operationId));
+    for (const operationId of Object.keys(DESCRIPTION_OVERRIDES)) {
+      expect(known.has(operationId), operationId).toBe(true);
+    }
+  });
+
+  it('warns that saving a zone replaces it, and points at the safe alternative', async () => {
+    const { client, close } = await connect();
+    const { tools } = await client.listTools();
+    const save = tools.find((t) => t.name === 'eurodns_dns_save_zone');
+
+    expect(save?.description).toContain('deleted');
+    expect(save?.description).toContain('eurodns_dns_upsert_record');
+    await close();
+  });
+
+  it('strips the HTML the document embeds in its descriptions', async () => {
+    const { client, close } = await connect();
+    const { tools } = await client.listTools();
+
+    for (const tool of tools) {
+      expect(tool.description ?? '', tool.name).not.toContain('<br');
+    }
+    await close();
+  });
+});
