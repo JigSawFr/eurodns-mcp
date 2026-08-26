@@ -1,8 +1,7 @@
 import { createRemoteJWKSet, jwtVerify, type JWTPayload, type JWTVerifyGetKey } from 'jose';
 import { createHash, timingSafeEqual } from 'node:crypto';
-import type { OAuthTokenVerifier } from '@modelcontextprotocol/sdk/server/auth/provider.js';
-import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
-import { InvalidTokenError } from '@modelcontextprotocol/sdk/server/auth/errors.js';
+import { OAuthError, OAuthErrorCode, type AuthInfo } from '@modelcontextprotocol/server';
+import type { OAuthTokenVerifier } from '@modelcontextprotocol/express';
 import type { OAuthConfig } from '../config.js';
 import { ALL_SCOPES } from '../constants.js';
 
@@ -45,7 +44,8 @@ export class JwtTokenVerifier implements OAuthTokenVerifier {
         algorithms: this.config.algorithms,
       }));
     } catch (cause) {
-      throw new InvalidTokenError(
+      throw new OAuthError(
+        OAuthErrorCode.InvalidToken,
         `Token rejected: ${cause instanceof Error ? cause.message : 'verification failed'}`,
       );
     }
@@ -92,7 +92,7 @@ export class StaticTokenVerifier implements OAuthTokenVerifier {
     // comparing directly would leak the expected length through an early return.
     const matches = timingSafeEqual(digest(token), this.expected);
 
-    if (!matches) throw new InvalidTokenError('Token rejected');
+    if (!matches) throw new OAuthError(OAuthErrorCode.InvalidToken, 'Token rejected');
 
     return {
       token,

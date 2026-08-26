@@ -1,4 +1,4 @@
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { McpServer } from '@modelcontextprotocol/server';
 import { userInfo } from 'node:os';
 import { AuditLogger, type AuditActor } from './audit.js';
 import type { Config } from './config.js';

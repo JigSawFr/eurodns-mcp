@@ -1,5 +1,4 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
+import type { McpServer, AuthInfo } from '@modelcontextprotocol/server';
 import { z, type ZodRawShape } from 'zod';
 import {
   OPERATIONS,
@@ -38,10 +37,10 @@ const paginationShape: ZodRawShape = {
  * into a hard tool failure. Wrapping instead gives callers reliable structured access to
  * the status and payload without asserting the payload's shape.
  */
-const outputShape = {
+const outputSchema = z.object({
   status: z.number().int().describe('Upstream HTTP status code.'),
   data: z.unknown().describe('Response body as returned by the API.'),
-} satisfies ZodRawShape;
+});
 
 /**
  * A shape being assembled.
@@ -61,7 +60,13 @@ function parameterShape(params: GeneratedParameter[]): ZodRawShape {
   return shape;
 }
 
-export function buildInputShape(operation: GeneratedOperation): ZodRawShape {
+/**
+ * The input schema for one operation.
+ *
+ * Assembled as a shape from three parameter groups, then wrapped: from the 2026-07-28 SDK a
+ * tool takes a Standard Schema object rather than a raw shape.
+ */
+export function buildInputSchema(operation: GeneratedOperation) {
   const shape: MutableShape = {
     ...parameterShape(operation.pathParams),
     ...parameterShape(operation.queryParams),
@@ -75,7 +80,7 @@ export function buildInputShape(operation: GeneratedOperation): ZodRawShape {
     shape.body = operation.body.required ? schema : schema.optional();
   }
 
-  return shape;
+  return z.object(shape);
 }
 
 /** Substitutes `{placeholders}` in the operation path from the call arguments. */
@@ -202,14 +207,13 @@ function registerOperation(
 ): void {
   const name = toolNameFor(operation);
   const isRead = operation.risk === 'read';
-
   server.registerTool(
     name,
     {
       title: operation.summary || operation.operationId,
       description: describeOperation(operation),
-      inputSchema: buildInputShape(operation),
-      outputSchema: outputShape,
+      inputSchema: buildInputSchema(operation),
+      outputSchema,
       annotations: {
         readOnlyHint: isRead,
         destructiveHint: operation.risk === 'destructive' || operation.method === 'DELETE',
@@ -217,9 +221,9 @@ function registerOperation(
         openWorldHint: true,
       },
     },
-    async (rawArgs, extra) => {
+    async (rawArgs, ctx) => {
       const args = (rawArgs ?? {}) as Record<string, unknown>;
-      const identity = identityFrom(context, extra?.authInfo);
+      const identity = identityFrom(context, ctx?.http?.authInfo);
 
       const span = context.audit.begin({
         actor: identity.actor,

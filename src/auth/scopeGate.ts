@@ -1,6 +1,7 @@
 import type { NextFunction, Request, Response } from 'express';
-// Brings in the SDK's `Request.auth` declaration merging.
-import type {} from '@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js';
+// Side-effect import: this is what brings in the SDK's `Request.auth` declaration merging,
+// which is how `req.auth` below is typed at all.
+import '@modelcontextprotocol/express';
 import type { ToolRequirement } from '../tools/registry.js';
 
 interface JsonRpcCall {

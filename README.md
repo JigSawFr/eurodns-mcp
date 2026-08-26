@@ -10,7 +10,7 @@ domains, DNS zones, contacts, subscriptions, SSL, invoices and orders.
 [![CI](https://github.com/JigSawFr/eurodns-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/JigSawFr/eurodns-mcp/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%E2%89%A522-brightgreen.svg)](package.json)
-[![MCP](https://img.shields.io/badge/MCP-2025--11--25-8A63D2.svg)](https://modelcontextprotocol.io/specification/2025-11-25)
+[![MCP](https://img.shields.io/badge/MCP-2026--07--28-8A63D2.svg)](https://modelcontextprotocol.io/specification/2026-07-28)
 
 </div>
 
@@ -28,6 +28,8 @@ domains, DNS zones, contacts, subscriptions, SSL, invoices and orders.
 - **Three DNS workflow tools** that make record edits safe, because saving a zone replaces it.
 - **Guardrails** so a deployment can refuse operations that spend money or destroy things.
 - **Two transports** — `stdio` for a local client, streamable HTTP for a shared deployment.
+- **Both protocol eras on one endpoint** — speaks the 2026-07-28 revision natively and
+  still serves 2025-era clients, which is most of them today.
 - **OAuth 2.1 or a shared token** on HTTP, with an audit line per call.
 - **Queryable history** — ask the server what has been done, and by whom.
 - **1Password Connect** as an optional source for any secret it reads.
@@ -63,6 +65,26 @@ Two things are worth reading off that diagram. Authorisation has **two independe
 what the deployment permits at all, then what the caller's scopes permit within it. And the
 audit log is fed by **every** path, including refusals, because the upstream API
 authenticates every caller with one shared key and cannot attribute anything itself.
+
+## Protocol revisions
+
+The server speaks the **2026-07-28** revision — a stateless core, header-based routing,
+cacheable list results — and answers 2025-era clients on the same endpoint without any
+configuration. That matters because the two eras handshake differently: 2026-07-28 removed
+`initialize` in favour of `server/discover`, so a 2025 client's handshake is what identifies
+it. Nothing is stranded, and nothing has to be chosen up front.
+
+One consequence is worth knowing before you point a client at it. Answers on the 2025-era
+path now arrive as a **single SSE frame** rather than a plain JSON body, so the endpoint
+requires the `Accept` header streamable HTTP has always specified:
+
+```
+Accept: application/json, text/event-stream
+```
+
+A client sending only `application/json` — or `*/*` — is answered `406`. Every conforming
+MCP client already sends both; a hand-rolled `curl` probe usually does not, and that is the
+one thing that will surprise you.
 
 ## Requirements
 
