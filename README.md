@@ -480,6 +480,10 @@ committed output has drifted. Edit the generator or the curated names and descri
 Tests run against a real MCP client over an in-memory transport, with the HTTP layer driven
 through the real Express app. No test touches the network.
 
+[CONTRIBUTING.md](CONTRIBUTING.md) covers the conventions that are load bearing rather than
+decorative — what CI enforces and why, and the one rule that will bite you first. Everyone
+taking part is expected to follow the [code of conduct](CODE_OF_CONDUCT.md).
+
 ### Releasing
 
 Releases are cut by [release-please](https://github.com/googleapis/release-please) from
@@ -496,13 +500,6 @@ commit subject — which is why CI checks that title. The failure mode this guar
 quiet: a non-conforming subject contributes nothing and no release appears.
 
 The version stays in `0.x` until the server has been exercised against the real EuroDNS API.
-
-## Protocol version
-
-Built on MCP `2025-11-25`, the revision the TypeScript SDK implements. Revision `2026-07-28`
-removes sessions and the initialization handshake; this server is already stateless, and the
-authorization design it relies on is unchanged in that revision, so adopting it will be an
-SDK upgrade rather than a rewrite.
 
 ## License
 
