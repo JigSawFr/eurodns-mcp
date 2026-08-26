@@ -1,7 +1,7 @@
 {
   "name": "eurodns-mcp-server",
   "version": "0.1.0",
-  "description": "Model Context Protocol server for the EuroDNS User API — domains, DNS zones, subscriptions and SSL.",
+  "description": "Model Context Protocol server for the EuroDNS User API \u2014 domains, DNS zones, subscriptions and SSL.",
   "keywords": [
     "mcp",
     "model-context-protocol",
@@ -57,7 +57,6 @@
     "@typescript-eslint/eslint-plugin": "^8.20.0",
     "@typescript-eslint/parser": "^8.20.0",
     "eslint": "^9.18.0",
-    "msw": "^2.7.0",
     "prettier": "^3.4.2",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3",
