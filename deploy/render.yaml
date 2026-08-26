@@ -1,0 +1,42 @@
+# Render Blueprint. Point a new Blueprint instance at this file.
+#
+# Note before committing to Render: a dedicated outbound IP set costs $100/month on a Pro
+# workspace. Since the EuroDNS API filters by source IP, the shared regional ranges are not
+# a real option — allowlisting a range shared with other customers defeats the control.
+
+services:
+  - type: web
+    name: eurodns-mcp
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    region: frankfurt
+    plan: starter
+    healthCheckPath: /healthz
+
+    # The history query tool reads the audit log back, so it needs a real disk.
+    disk:
+      name: audit
+      mountPath: /data
+      sizeGB: 1
+
+    envVars:
+      - key: HOST
+        value: 0.0.0.0
+      - key: PORT
+        value: 3000
+      - key: EURODNS_AUDIT_DESTINATION
+        value: file
+      - key: EURODNS_AUDIT_FILE
+        value: /data/audit.jsonl
+
+      # The server refuses to listen on 0.0.0.0 without authentication.
+      - key: EURODNS_MCP_AUTH
+        value: token
+
+      # sync: false keeps these out of the repository — set them in the dashboard.
+      - key: EURODNS_MCP_TOKEN
+        sync: false
+      - key: EURODNS_APP_ID
+        sync: false
+      - key: EURODNS_API_KEY
+        sync: false
