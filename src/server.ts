@@ -7,6 +7,7 @@ import { registerAuditTools } from './tools/audit.js';
 import { registerDnsTools } from './tools/dns.js';
 import { registerGeneratedTools } from './tools/registry.js';
 import type { ToolContext } from './tools/context.js';
+import type { MetricsRegistry } from './metrics.js';
 
 export const SERVER_NAME = 'eurodns-mcp-server';
 export const SERVER_VERSION = '0.1.0';
@@ -16,6 +17,17 @@ export interface BuildOptions {
   /** Injectable for tests; defaults to the global fetch. */
   fetchImpl?: FetchLike;
   transport: 'stdio' | 'http';
+  /**
+   * Process-wide counters. The HTTP transport builds a fresh server per request, so this
+   * has to come from outside or every request would start counting from zero.
+   */
+  metrics?: MetricsRegistry;
+  /**
+   * Process-wide audit logger, for the same reason and a sharper one: it carries the hash
+   * chain. A logger per request would open a new chain segment on every call, which on a
+   * stream destination — where there is no file to resume from — means no chain at all.
+   */
+  audit?: AuditLogger;
 }
 
 /** Identity used when the transport carries no token of its own. */
@@ -51,7 +63,7 @@ export function buildServer(options: BuildOptions): BuiltServer {
   const context: ToolContext = {
     config: options.config,
     client: new EuroDnsClient(options.config.upstream, options.fetchImpl),
-    audit: new AuditLogger(options.config.audit),
+    audit: options.audit ?? new AuditLogger(options.config.audit, Date.now, options.metrics),
     fallbackActor: fallbackActor(options),
     requireScopes: options.transport === 'http' && options.config.http.authMode === 'oauth',
   };

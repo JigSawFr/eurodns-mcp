@@ -81,6 +81,15 @@ export interface HttpConfig {
   allowedOrigins: string[];
   /** Largest JSON body accepted, in bytes. Enforced before authentication. */
   maxBodyBytes: number;
+  /**
+   * Bearer secret for `/metrics`. Unset means the endpoint does not exist.
+   *
+   * One variable rather than an enable flag and a credential: the endpoint reveals which
+   * tools a deployment runs and how often they are refused, which is not secret but is not
+   * for anyone who finds the host either. Requiring the secret to turn it on removes the
+   * configuration where it is exposed by accident.
+   */
+  metricsToken?: string;
   oauth?: OAuthConfig;
 }
 
@@ -248,7 +257,20 @@ function loadHttpConfig(env: NodeJS.ProcessEnv, transport: 'stdio' | 'http'): Ht
     ),
   };
 
+  // Everything below is HTTP-only. Under stdio there is no listener, so none of it applies
+  // and validating it would only produce complaints about settings that do nothing.
   if (transport !== 'http') return config;
+
+  const metricsToken = (env.EURODNS_METRICS_TOKEN || '').trim();
+  if (metricsToken !== '') {
+    if (metricsToken.length < 32) {
+      throw new ConfigError(
+        'EURODNS_METRICS_TOKEN must be at least 32 characters. Unset it to disable the ' +
+          'metrics endpoint entirely.',
+      );
+    }
+    config.metricsToken = metricsToken;
+  }
 
   // A server reachable from outside the loopback interface must authenticate its callers.
   if (authMode === 'none' && host !== '127.0.0.1' && host !== 'localhost' && host !== '::1') {

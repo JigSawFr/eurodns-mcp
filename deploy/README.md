@@ -100,6 +100,96 @@ plan.
 One caveat worth weighing: Railway's own documentation does not guarantee the assigned IPv4
 is dedicated to you. For an allowlist-based control, that is the guarantee that matters.
 
+## Shipping the audit log to a SIEM
+
+The log is JSON lines, one object per event, already in the shape an ingestion pipeline
+wants. There is no formatting to do — only a transport to pick.
+
+| Approach                                                            | Code to write | When it is the right one                                                |
+| ------------------------------------------------------------------- | ------------- | ----------------------------------------------------------------------- |
+| `EURODNS_AUDIT_DESTINATION=stdout` and the platform's log drain     | none          | Fly, Render and Railway all forward raw stdout to an external collector |
+| A file, tailed by a collector (Vector, Fluent Bit, Filebeat, Alloy) | none          | Kubernetes, a VM, anywhere a sidecar is possible                        |
+
+Try the first before writing anything: `stdout` exists precisely because it is the channel
+every container platform knows how to relay. Under stdio it is refused, because there stdout
+carries the JSON-RPC stream — use a file.
+
+**Do not poll the server for this.** `eurodns_audit_query` answers a question in
+conversation; it is not an ingestion API, and it reads only a bounded window from the end of
+the log.
+
+Fields worth mapping in a SIEM:
+
+| Field                          | Meaning                                                           |
+| ------------------------------ | ----------------------------------------------------------------- |
+| `ts`                           | ISO 8601, UTC                                                     |
+| `actor.mode` / `actor.subject` | How the caller was identified, and who they are                   |
+| `tool`, `risk`                 | What was called, and what class of operation it is                |
+| `target`                       | Domain or subscription the call acted on                          |
+| `verdict`                      | `allowed`, `denied` (a guardrail or scope refused it) or `failed` |
+| `upstreamStatus`               | HTTP status from the EuroDNS API                                  |
+| `correlationId`                | Pairs the `started` and `completed` lines of one call             |
+| `seq`, `prev`                  | Position in the hash chain, and the hash of the previous line     |
+
+`verdict: denied` is the row worth alerting on: it means something asked for an operation the
+deployment forbids.
+
+### What the hash chain does and does not prove
+
+Every line carries the SHA-256 of the line before it. Editing or deleting a line in the
+middle of the log breaks the chain at the next line, and `eurodns_audit_query` reports it —
+`chain.intact` false, with `chain.brokenAt` naming the sequence number.
+
+It does **not** detect the log being cut short at the end: a shorter valid chain is still a
+valid chain. Nor does it stop anyone from rewriting the whole log from scratch if they hold
+the file. Both are why shipping lines off the host as they are written complements the chain
+rather than replacing it — once a copy is in the SIEM, the two can be compared.
+
+On a stream destination the chain restarts at each process start, marked by `prev: null`,
+because the process cannot see what a previous run wrote. A verifier reads that as a restart,
+not as tampering. With a file it resumes from the last line, so restarts leave no gap.
+
+## Supervision
+
+Setting `EURODNS_METRICS_TOKEN` — 32 characters or more — adds `GET /metrics` in the
+Prometheus text format, requiring that token as a bearer. Leaving it unset means the endpoint
+does not exist at all.
+
+It is a **separate secret from the MCP token on purpose**: the poller is a monitoring system,
+and it should not hold a credential that can also change DNS. Under OAuth the MCP credential
+is a short-lived JWT no monitoring system could carry anyway.
+
+```
+eurodns_mcp_build_info{version="…"}                              1
+eurodns_mcp_start_time_seconds                                   …
+eurodns_mcp_tools_registered                                     …
+eurodns_mcp_tool_calls_total{tool,risk,verdict}                  …
+eurodns_mcp_upstream_responses_total{status}                     …
+eurodns_mcp_tool_duration_seconds_{sum,count}{risk}              …
+eurodns_mcp_audit_log_bytes                                      …
+```
+
+No label carries a domain, a subscription id or an actor identity. Those belong in the audit
+log, which is access-controlled; a metrics endpoint is polled by machines that have no
+business learning which domains a deployment manages.
+
+**Zabbix, Centreon, Checkmk and PRTG** all consume HTTP natively. In Zabbix, an HTTP agent
+master item on `/metrics` with dependent items using Prometheus preprocessing needs no
+gateway at all.
+
+**If the monitoring system only speaks SNMP**, bridge on the host rather than in the
+application — an `extend` directive in `snmpd.conf` pointing at a script that reads
+`/metrics`:
+
+```
+extend eurodns-mcp /usr/local/bin/eurodns-mcp-metric
+```
+
+An SNMP agent inside the server would be the wrong place for three reasons: UDP 161 is below
+1024 and needs `CAP_NET_BIND_SERVICE`, exactly the capability the container drops; SNMPv2c
+community strings travel in clear and SNMPv3 adds a third secret store; and exposing
+application metrics properly means publishing and maintaining a MIB.
+
 ## Verifying a deployment
 
 ```bash

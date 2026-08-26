@@ -97,6 +97,8 @@ describe('audit log reader', () => {
       entries: [],
       scanned: 0,
       truncated: false,
+      // Nothing to verify is not the same as a failed verification.
+      chain: { intact: true, verified: 0, segments: 0 },
     });
   });
 });

@@ -43,6 +43,15 @@ export const DEFAULT_JWT_ALGORITHMS = [
 export const DEFAULT_AUDIT_MAX_BYTES = 64 * 1024 * 1024;
 
 /**
+ * Permissions for the audit file, and the suffix a rotated generation takes.
+ *
+ * The log is the only record attributing a DNS change to a person, so it should not be
+ * readable by every account on the host.
+ */
+export const AUDIT_FILE_MODE = 0o600;
+export const ROTATED_SUFFIX = '.1';
+
+/**
  * Largest JSON request body accepted over HTTP.
  *
  * Body parsing happens before authentication — an unauthenticated caller should not be able
