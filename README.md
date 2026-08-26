@@ -17,6 +17,8 @@ tools, so an MCP client can manage them in natural language.
 - **Guardrails** so a deployment can refuse operations that spend money or destroy things.
 - **Two transports** — `stdio` for a local client, streamable HTTP for a shared deployment.
 - **OAuth 2.1 or a shared token** on HTTP, with an audit line per call.
+- **Queryable history** — ask the server what has been done, and by whom.
+- **1Password Connect** as an optional source for any secret it reads.
 
 ## Requirements
 
@@ -75,6 +77,31 @@ exec npx -y eurodns-mcp
 
 Store the secrets once with, for example,
 `security add-generic-password -s eurodns-api-key -a "$USER" -w`.
+
+### Reading secrets from 1Password Connect
+
+If you already run a [1Password Connect](https://developer.1password.com/docs/connect) server,
+any `EURODNS_*` variable may hold a secret reference instead of a value:
+
+```bash
+export OP_CONNECT_HOST="https://op-connect.internal:8080"
+export OP_CONNECT_TOKEN="…"
+
+export EURODNS_APP_ID="op://Infra/EuroDNS API/username"
+export EURODNS_API_KEY="op://Infra/EuroDNS API/credential"
+```
+
+Both `op://vault/item/field` and `op://vault/item/section/field` work, and a segment that is
+already a 1Password id is used as-is. This covers every secret the server reads, including
+`EURODNS_MCP_TOKEN` and the OAuth settings.
+
+This adds no dependency: the server calls the Connect REST API directly, and an environment
+with no references never contacts 1Password at all. If a reference cannot be resolved the
+server refuses to start, naming the reference and the step that failed — a server running
+without its credentials would serve nothing and hide the cause.
+
+References are resolved **once, at startup**. A value rotated in 1Password is picked up on
+the next restart.
 
 ## The DNS workflow tools
 
@@ -209,6 +236,27 @@ action can be traced to a person.
 Set `EURODNS_AUDIT_DESTINATION` to `stderr` (default), `stdout`, `file` (with
 `EURODNS_AUDIT_FILE`) or `none`. `stdout` is refused under stdio, where it carries the
 JSON-RPC stream.
+
+### Asking the server what happened
+
+With `EURODNS_AUDIT_QUERY` set, a `eurodns_audit_query` tool answers questions about past
+actions — which tool ran, on what, for whom, and whether it was allowed, refused or failed.
+Filter by time range, tool, target, verdict or risk class.
+
+| Value           | Effect                                |
+| --------------- | ------------------------------------- |
+| `off` (default) | No query tool.                        |
+| `own`           | A caller sees only their own actions. |
+| `all`           | A caller sees every action.           |
+
+Three things are deliberate here. It requires `EURODNS_AUDIT_DESTINATION=file` — stderr and
+stdout are write-only, so there would be nothing to read back. It needs its own
+**`eurodns.audit`** scope rather than riding on `eurodns.read`, because reading who did what
+is not reading DNS data. And in `own` mode an explicit `actor` filter is refused rather than
+quietly ignored, so nobody mistakes a filtered result for the whole picture.
+
+Queries read a bounded window from the end of the log. When older entries lie beyond it the
+result says so, so you narrow the time range instead of concluding you have seen everything.
 
 ## Environment variables
 
