@@ -18,6 +18,7 @@ import { ALL_SCOPES } from './constants.js';
 import { SERVER_NAME, SERVER_VERSION, buildServer, hiddenClasses } from './server.js';
 import { MetricsRegistry } from './metrics.js';
 import { AuditLogger } from './audit.js';
+import { installShutdown } from './shutdown.js';
 import { toolScopeIndex } from './tools/registry.js';
 import { scopeGate } from './auth/scopeGate.js';
 import { JwtTokenVerifier, StaticTokenVerifier } from './auth/verifier.js';
@@ -305,19 +306,10 @@ async function main(): Promise<void> {
   // Until now the process had no signal handling at all, which was survivable only because
   // every audit write was synchronous. It is not any more: a platform that stops idle
   // machines sends SIGTERM often, and whatever the forwarder still holds would go with it.
-  let shuttingDown = false;
-  const shutdown = (signal: string): void => {
-    if (shuttingDown) return;
-    shuttingDown = true;
-    process.stderr.write(`${SERVER_NAME} received ${signal}, draining\n`);
-    server.close();
-    void audit.close().then(() => process.exit(0));
-  };
-  process.on('SIGTERM', () => {
-    shutdown('SIGTERM');
-  });
-  process.on('SIGINT', () => {
-    shutdown('SIGINT');
+  installShutdown({
+    onSignal: (signal) => process.stderr.write(`${SERVER_NAME} received ${signal}, draining\n`),
+    stopAccepting: () => server.close(),
+    drain: () => audit.close(),
   });
 }
 

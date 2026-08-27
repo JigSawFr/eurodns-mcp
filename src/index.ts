@@ -4,6 +4,7 @@ import { ConfigError, loadConfig } from './config.js';
 import { OnePasswordError, resolveEnvSecrets } from './secrets/index.js';
 import { SERVER_NAME, SERVER_VERSION, buildServer, hiddenClasses } from './server.js';
 import { AuditLogger } from './audit.js';
+import { installShutdown } from './shutdown.js';
 
 /**
  * stdio entry point.
@@ -27,14 +28,7 @@ async function main(): Promise<void> {
 
   // The parent decides when this process ends, and on stdio that is usually a signal. If a
   // collector is configured, whatever it has not received yet would be lost without this.
-  let shuttingDown = false;
-  const shutdown = (): void => {
-    if (shuttingDown) return;
-    shuttingDown = true;
-    void audit.close().then(() => process.exit(0));
-  };
-  process.on('SIGTERM', shutdown);
-  process.on('SIGINT', shutdown);
+  installShutdown({ drain: () => audit.close() });
 
   const hidden = hiddenClasses(config);
   process.stderr.write(
