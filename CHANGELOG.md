@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/JigSawFr/eurodns-mcp/compare/v0.3.0...v0.3.1) (2026-08-27)
+
+
+### Bug fixes
+
+* **deploy:** create the audit volume on first launch ([#33](https://github.com/JigSawFr/eurodns-mcp/issues/33)) ([56a31ec](https://github.com/JigSawFr/eurodns-mcp/commit/56a31ecc9a9c3872c57fe2dcc5a0caa00f368963))
+
 ## [0.3.0](https://github.com/JigSawFr/eurodns-mcp/compare/v0.2.1...v0.3.0) (2026-08-27)
 
 
