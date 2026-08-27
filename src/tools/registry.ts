@@ -173,6 +173,11 @@ export const HAND_WRITTEN_TOOL_REQUIREMENTS: Record<string, ToolRequirement> = {
 /**
  * Tool name to its requirement, for callers that must decide before dispatch — the HTTP
  * scope gate needs to know what a call requires before the tool handler ever runs.
+ *
+ * Every tool a handler gates on scopes must appear here, or the gate never runs for it and
+ * the handler's own check becomes the only thing standing between a caller and an operation
+ * their token does not authorise. A test asserts that, because the failure mode of
+ * forgetting is silent: the tool works, for everyone.
  */
 export function toolScopeIndex(): Map<string, ToolRequirement> {
   const index = new Map<string, ToolRequirement>();

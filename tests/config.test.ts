@@ -2,6 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { ConfigError, loadConfig } from '../src/config.js';
 import { DEFAULT_JWT_ALGORITHMS } from '../src/constants.js';
 import { startupLine } from '../src/server.js';
+import { toolScopeIndex } from '../src/tools/registry.js';
+import { connect } from './harness.js';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 /** The two credentials every configuration needs, so a case can vary one thing. */
 const base = { EURODNS_APP_ID: 'app', EURODNS_API_KEY: 'key' };
@@ -169,5 +174,34 @@ describe('the line an operator sees at startup', () => {
     expect(listening).toContain('auth: token');
 
     expect(startupLine({ config: config(), toolCount: 63 })).toContain('ready on stdio');
+  });
+});
+
+describe('the scope gate and the handler agree on what exists', () => {
+  it('has a scope requirement registered for every advertised tool', async () => {
+    // The two gates are deliberate: the HTTP middleware refuses before dispatch, and the
+    // handler refuses again. But the middleware can only refuse what it knows about — a
+    // tool missing from toolScopeIndex is waved straight through it. That failure is
+    // silent, and this is what makes it loud.
+    const config = loadConfig(
+      {
+        ...base,
+        EURODNS_ALLOW_BILLING: 'true',
+        EURODNS_ALLOW_DESTRUCTIVE: 'true',
+        EURODNS_AUDIT_DESTINATION: 'file',
+        EURODNS_AUDIT_FILE: join(mkdtempSync(join(tmpdir(), 'eurodns-scope-')), 'audit.jsonl'),
+        EURODNS_AUDIT_QUERY: 'all',
+      },
+      'stdio',
+    );
+
+    const { client, close } = await connect({ config });
+    const { tools } = await client.listTools();
+    const index = toolScopeIndex();
+
+    const missing = tools.map((t) => t.name).filter((name) => !index.has(name));
+    expect(missing, `no scope requirement registered for: ${missing.join(', ')}`).toEqual([]);
+    expect(tools.length).toBeGreaterThan(60);
+    await close();
   });
 });
