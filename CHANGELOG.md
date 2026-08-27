@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/JigSawFr/eurodns-mcp/compare/v0.4.0...v0.4.1) (2026-08-27)
+
+
+### Refactoring
+
+* **dns:** write the upstream failure path once instead of three times ([#43](https://github.com/JigSawFr/eurodns-mcp/issues/43)) ([0445ae9](https://github.com/JigSawFr/eurodns-mcp/commit/0445ae9f3683ff495410accd88d95d42a3567092))
+
 ## [0.4.0](https://github.com/JigSawFr/eurodns-mcp/compare/v0.3.1...v0.4.0) (2026-08-27)
 
 
