@@ -63,6 +63,13 @@ jobs:
             type=semver,pattern={{major}}.{{minor}},value=${{ inputs.tag }}
             type=semver,pattern={{major}},value=${{ inputs.tag }}
             type=sha,format=long
+          # metadata-action derives org.opencontainers.image.description from the GitHub
+          # repository description, and passes it to build-push-action, where an empty value
+          # overwrites the LABEL the Dockerfile sets. The 0.3.1 build shipped with
+          # `image.description: ""` for exactly that reason. Naming it here keeps the label
+          # correct whether or not the repository has a description set.
+          labels: |
+            org.opencontainers.image.description=Model Context Protocol server for the EuroDNS User API
 
       - id: build
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
