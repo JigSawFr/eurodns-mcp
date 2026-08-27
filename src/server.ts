@@ -8,6 +8,7 @@ import { registerDnsTools } from './tools/dns.js';
 import { registerGeneratedTools } from './tools/registry.js';
 import type { ToolContext } from './tools/context.js';
 import type { MetricsRegistry } from './metrics.js';
+import { TOOL_LIST_CACHE_MS } from './constants.js';
 
 export const SERVER_NAME = 'eurodns-mcp-server';
 export const SERVER_VERSION = '0.1.0';
@@ -48,6 +49,22 @@ function fallbackActor(options: BuildOptions): AuditActor {
     : { mode: 'none', subject: 'anonymous' };
 }
 
+/**
+ * Names the risk classes a deployment is hiding, for the startup line.
+ *
+ * Hiding is the honest surface, but it costs discoverability: a disabled tool no longer
+ * answers with the variable that would enable it, it simply is not there. Saying so once at
+ * startup is what the operator gets instead.
+ */
+export function hiddenClasses(config: Config): string[] {
+  const { readOnly, allowBilling, allowDestructive } = config.guardrails;
+  if (readOnly) return ['everything that changes state (EURODNS_READ_ONLY)'];
+  const hidden: string[] = [];
+  if (!allowBilling) hidden.push('billing (EURODNS_ALLOW_BILLING)');
+  if (!allowDestructive) hidden.push('irreversible (EURODNS_ALLOW_DESTRUCTIVE)');
+  return hidden;
+}
+
 export interface BuiltServer {
   server: McpServer;
   context: ToolContext;
@@ -57,7 +74,19 @@ export interface BuiltServer {
 export function buildServer(options: BuildOptions): BuiltServer {
   const server = new McpServer(
     { name: SERVER_NAME, version: SERVER_VERSION },
-    { capabilities: { tools: {} } },
+    {
+      capabilities: { tools: {} },
+      // The tool surface is generated from a document vendored in the image: it is identical
+      // for every caller and changes only when a new image ships. Without a hint the SDK
+      // emits `ttlMs: 0`, so a stateless deployment rebuilds and serialises 80-odd tools on
+      // every single request. `public` is safe precisely because nothing here is per-caller —
+      // the guardrails that do vary decide which tools exist at construction, and a
+      // deployment that changes them restarts the process.
+      cacheHints: {
+        'tools/list': { ttlMs: TOOL_LIST_CACHE_MS, cacheScope: 'public' },
+        'server/discover': { ttlMs: TOOL_LIST_CACHE_MS, cacheScope: 'public' },
+      },
+    },
   );
 
   const context: ToolContext = {
@@ -66,6 +95,7 @@ export function buildServer(options: BuildOptions): BuiltServer {
     audit: options.audit ?? new AuditLogger(options.config.audit, Date.now, options.metrics),
     fallbackActor: fallbackActor(options),
     requireScopes: options.transport === 'http' && options.config.http.authMode === 'oauth',
+    sessionful: options.transport === 'stdio',
   };
 
   const generated = registerGeneratedTools(server, context);

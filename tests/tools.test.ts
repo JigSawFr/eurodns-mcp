@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { OPERATIONS } from '../src/generated/operations.js';
 import { toolNameFor } from '../src/tools/naming.js';
-import { connect, isError, stubFetch, testConfig, textOf } from './harness.js';
+import { evaluateGuardrails } from '../src/auth/scopes.js';
+import { connect, isError, stubFetch, testConfig } from './harness.js';
 
 describe('tool surface', () => {
   it('exposes every operation plus the DNS workflow tools, with unique names', async () => {
-    const { client, toolCount, close } = await connect();
+    const { client, toolCount, close } = await connect({
+      config: testConfig({ EURODNS_ALLOW_BILLING: 'true', EURODNS_ALLOW_DESTRUCTIVE: 'true' }),
+    });
     const { tools } = await client.listTools();
 
     expect(toolCount).toBe(OPERATIONS.length + 3);
@@ -31,7 +34,9 @@ describe('tool surface', () => {
   });
 
   it('annotates reads as read-only and deletes as destructive', async () => {
-    const { client, close } = await connect();
+    const { client, close } = await connect({
+      config: testConfig({ EURODNS_ALLOW_DESTRUCTIVE: 'true' }),
+    });
     const { tools } = await client.listTools();
     const byName = new Map(tools.map((t) => [t.name, t]));
 
@@ -100,19 +105,13 @@ describe('deployment guardrails', () => {
     await close();
   });
 
-  it('refuses billing operations unless they are explicitly enabled', async () => {
-    const { fetchImpl, requests } = stubFetch(() => ({ body: {} }));
-    const { client, close } = await connect({ fetchImpl });
+  it('does not advertise billing tools unless they are explicitly enabled', async () => {
+    const { client, close } = await connect();
+    const names = (await client.listTools()).tools.map((t) => t.name);
 
-    const result = await client.callTool({
-      name: 'eurodns_premium_dns_renew_subscription',
-      arguments: { subscriptionId: 1, body: { duration: 1 } },
-    });
-
-    expect(isError(result)).toBe(true);
-    expect(textOf(result)).toContain('EURODNS_ALLOW_BILLING');
-    // Refused before anything reached the API.
-    expect(requests).toHaveLength(0);
+    expect(names).not.toContain('eurodns_premium_dns_renew_subscription');
+    // Reads are unaffected: only the disabled class disappears.
+    expect(names).toContain('eurodns_dns_get_zone');
 
     await close();
   });
@@ -135,20 +134,28 @@ describe('deployment guardrails', () => {
     await close();
   });
 
-  it('refuses irreversible non-DNS operations unless enabled', async () => {
-    const { fetchImpl, requests } = stubFetch(() => ({ body: {} }));
-    const { client, close } = await connect({ fetchImpl });
+  it('does not advertise irreversible non-DNS operations unless enabled', async () => {
+    const { client, close } = await connect();
+    const names = (await client.listTools()).tools.map((t) => t.name);
 
-    const result = await client.callTool({
-      name: 'eurodns_ssl_revoke_certificate',
-      arguments: { subscriptionId: 1, certificateId: 2 },
-    });
-
-    expect(isError(result)).toBe(true);
-    expect(textOf(result)).toContain('EURODNS_ALLOW_DESTRUCTIVE');
-    expect(requests).toHaveLength(0);
+    expect(names).not.toContain('eurodns_ssl_revoke_certificate');
+    expect(names).toContain('eurodns_dns_get_zone');
 
     await close();
+  });
+
+  // The switch is what enforces; hiding only decides what is advertised. A tool reached by
+  // any other path still has to meet it, which is what keeps the two from drifting apart.
+  it('still refuses a disabled class at the guardrail, not only by hiding it', () => {
+    const guardrails = testConfig().guardrails;
+
+    const billing = evaluateGuardrails('billing', guardrails);
+    const destructive = evaluateGuardrails('destructive', guardrails);
+
+    expect(billing.allowed).toBe(false);
+    expect(destructive.allowed).toBe(false);
+    if (!billing.allowed) expect(billing.reason).toContain('EURODNS_ALLOW_BILLING');
+    expect(evaluateGuardrails('read', guardrails).allowed).toBe(true);
   });
 
   it('keeps DNS record deletion available by default', async () => {
@@ -191,6 +198,90 @@ describe('tool descriptions', () => {
     for (const tool of tools) {
       expect(tool.description ?? '', tool.name).not.toContain('<br');
     }
+    await close();
+  });
+});
+
+describe('confirmation before irreversible and billable operations', () => {
+  const enabled = (extra: Record<string, string> = {}) =>
+    testConfig({
+      EURODNS_ALLOW_BILLING: 'true',
+      EURODNS_ALLOW_DESTRUCTIVE: 'true',
+      ...extra,
+    });
+
+  it('asks nothing when confirmation is off, which is the default', async () => {
+    const { fetchImpl, requests } = stubFetch(() => ({ body: {} }));
+    const { client, close } = await connect({ config: enabled(), fetchImpl });
+
+    const result = await client.callTool({
+      name: 'eurodns_ssl_revoke_certificate',
+      arguments: { subscriptionId: 1, certificateId: 2 },
+    });
+
+    expect(isError(result)).toBeFalsy();
+    expect(requests).toHaveLength(1);
+
+    await close();
+  });
+
+  it('runs the operation once the caller accepts', async () => {
+    const { fetchImpl, requests } = stubFetch(() => ({ body: {} }));
+    const { client, close } = await connect({
+      config: enabled({ EURODNS_CONFIRM: 'destructive' }),
+      fetchImpl,
+      onElicit: () => ({ action: 'accept', content: { confirm: true } }),
+    });
+
+    const result = await client.callTool({
+      name: 'eurodns_ssl_revoke_certificate',
+      arguments: { subscriptionId: 1, certificateId: 2 },
+    });
+
+    expect(isError(result)).toBeFalsy();
+    expect(requests).toHaveLength(1);
+
+    await close();
+  });
+
+  it('refuses when the caller accepts without saying yes', async () => {
+    const { fetchImpl, requests } = stubFetch(() => ({ body: {} }));
+    const { client, close } = await connect({
+      config: enabled({ EURODNS_CONFIRM: 'destructive' }),
+      fetchImpl,
+      // An accepted form that does not carry the flag is not a confirmation. The values come
+      // from the client and are never re-validated by the SDK, so this is the shape a buggy
+      // or hostile peer would send to slip past a looser check.
+      onElicit: () => ({ action: 'accept', content: { confirm: false } }),
+    });
+
+    const result = await client.callTool({
+      name: 'eurodns_ssl_revoke_certificate',
+      arguments: { subscriptionId: 1, certificateId: 2 },
+    });
+
+    expect(isError(result)).toBe(true);
+    expect(requests).toHaveLength(0);
+
+    await close();
+  });
+
+  it('leaves billing alone on the destructive-only setting', async () => {
+    const { fetchImpl, requests } = stubFetch(() => ({ body: {} }));
+    const { client, close } = await connect({
+      config: enabled({ EURODNS_CONFIRM: 'destructive' }),
+      fetchImpl,
+      onElicit: () => ({ action: 'decline' }),
+    });
+
+    const result = await client.callTool({
+      name: 'eurodns_premium_dns_renew_subscription',
+      arguments: { subscriptionId: 1, body: { duration: 1 } },
+    });
+
+    expect(isError(result)).toBeFalsy();
+    expect(requests).toHaveLength(1);
+
     await close();
   });
 });

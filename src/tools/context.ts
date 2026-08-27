@@ -17,6 +17,16 @@ export interface ToolContext {
    * there the deployment guardrails are the only limit, and that is the intended contract.
    */
   requireScopes: boolean;
+  /**
+   * Whether the connection can carry a confirmation exchange back to the caller.
+   *
+   * `inputRequired` is written once and the SDK serves both protocol eras from it — but its
+   * legacy shim needs a session to push the server-to-client leg through, and a stateless
+   * HTTP instance never saw an `initialize`, so the SDK's gate refuses there. On a 2026-07-28
+   * request the exchange rides the request itself and needs no session, which is why this is
+   * a floor rather than the whole test: see `canConfirm` in the registry.
+   */
+  sessionful: boolean;
 }
 
 /** Identity and permissions for one tool call, derived from the request's auth info. */

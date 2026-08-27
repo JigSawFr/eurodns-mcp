@@ -35,11 +35,21 @@ const upstreamSchema = z.object({
 
 export type UpstreamConfig = z.infer<typeof upstreamSchema>;
 
+/**
+ * Which risk classes ask the caller to confirm before running.
+ *
+ * `off` by default: confirmation changes what a tool call does, and a deployment that never
+ * asked for it should not start refusing calls after an upgrade.
+ */
+export type ConfirmMode = 'off' | 'destructive' | 'all';
+
 /** Which risk classes may run at all, independently of any per-user scope. */
 export interface GuardrailConfig {
   readOnly: boolean;
   allowBilling: boolean;
   allowDestructive: boolean;
+  /** `all` also covers billing. Never a substitute for the switches above. */
+  confirm: ConfirmMode;
 }
 
 export type AuditDestination = 'stderr' | 'stdout' | 'file' | 'none';
@@ -177,6 +187,14 @@ export function loadConfig(
       booleanFromEnv,
       env.EURODNS_ALLOW_DESTRUCTIVE,
       'EURODNS_ALLOW_DESTRUCTIVE',
+    ),
+    confirm: parseOrThrow(
+      z
+        .enum(['off', 'destructive', 'all'])
+        .optional()
+        .transform((v) => v ?? 'off'),
+      (env.EURODNS_CONFIRM || '').trim() === '' ? undefined : env.EURODNS_CONFIRM?.trim(),
+      'EURODNS_CONFIRM',
     ),
   };
 

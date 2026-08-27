@@ -103,10 +103,16 @@ describe('audit log', () => {
 
   it('records refusals, which are the lines an audit cares about most', async () => {
     const file = auditFile();
-    const { fetchImpl } = stubFetch(() => ({ body: {} }));
+    const { fetchImpl, requests } = stubFetch(() => ({ body: {} }));
     const { client, close } = await connect({
-      config: testConfig({ EURODNS_AUDIT_DESTINATION: 'file', EURODNS_AUDIT_FILE: file }),
+      config: testConfig({
+        EURODNS_AUDIT_DESTINATION: 'file',
+        EURODNS_AUDIT_FILE: file,
+        EURODNS_ALLOW_BILLING: 'true',
+        EURODNS_CONFIRM: 'all',
+      }),
       fetchImpl,
+      onElicit: () => ({ action: 'decline' }),
     });
 
     await client.callTool({
@@ -118,7 +124,36 @@ describe('audit log', () => {
     const lines = readLines(file);
     const completed = lines.find((l) => l.phase === 'completed');
     expect(completed?.verdict).toBe('denied');
-    expect(completed?.reason).toContain('EURODNS_ALLOW_BILLING');
+    expect(completed?.reason).toContain('declined');
+    // A declined confirmation stops the call before it reaches the API.
+    expect(requests).toHaveLength(0);
+  });
+
+  it('writes no line at all for a confirmation that was merely asked for', async () => {
+    const file = auditFile();
+    const { fetchImpl } = stubFetch(() => ({ body: { id: 'sub-1' } }));
+    const { client, close } = await connect({
+      config: testConfig({
+        EURODNS_AUDIT_DESTINATION: 'file',
+        EURODNS_AUDIT_FILE: file,
+        EURODNS_ALLOW_BILLING: 'true',
+        EURODNS_CONFIRM: 'all',
+      }),
+      fetchImpl,
+      onElicit: () => ({ action: 'accept', content: { confirm: true } }),
+    });
+
+    await client.callTool({
+      name: 'eurodns_premium_dns_renew_subscription',
+      arguments: { subscriptionId: 1, body: { duration: 1 } },
+    });
+    await close();
+
+    // The asking round is not an attempt and must not inflate the log: one call, one pair of
+    // lines, with the verdict of what actually happened.
+    const completed = readLines(file).filter((l) => l.phase === 'completed');
+    expect(completed).toHaveLength(1);
+    expect(completed[0]?.verdict).toBe('allowed');
   });
 
   it('still records a line when the upstream call fails', async () => {

@@ -66,10 +66,14 @@ describe('metrics endpoint', () => {
   it('counts a call that reached the API and one that a guardrail refused', async () => {
     const metrics = new MetricsRegistry();
     const { fetchImpl } = stubFetch(() => ({ body: { name: 'example.com' } }));
-    const app = await createApp(httpConfig({ EURODNS_METRICS_TOKEN: METRICS_TOKEN }), {
-      fetchImpl,
-      metrics,
-    });
+    const app = await createApp(
+      httpConfig({
+        EURODNS_METRICS_TOKEN: METRICS_TOKEN,
+        EURODNS_ALLOW_BILLING: 'true',
+        EURODNS_CONFIRM: 'all',
+      }),
+      { fetchImpl, metrics },
+    );
 
     const call = (body: object) =>
       request(app)
@@ -79,7 +83,8 @@ describe('metrics endpoint', () => {
         .send(body);
 
     await call(callTool('eurodns_dns_get_zone', { domainName: 'example.com' }));
-    // Billing is disabled by default, so this is refused before it reaches the API.
+    // 2025-era traffic on the stateless transport: there is no session for a confirmation
+    // exchange to travel over, so the call is refused rather than quietly run unconfirmed.
     await call(
       callTool('eurodns_premium_dns_renew_subscription', {
         subscriptionId: 1,

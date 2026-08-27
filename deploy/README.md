@@ -132,7 +132,7 @@ Fields worth mapping in a SIEM:
 | `seq`, `prev`                  | Position in the hash chain, and the hash of the previous line     |
 
 `verdict: denied` is the row worth alerting on: it means something asked for an operation the
-deployment forbids.
+deployment forbids, or one a caller was asked to confirm and did not.
 
 ### What the hash chain does and does not prove
 
@@ -208,6 +208,29 @@ you do not own lets a caller forge the address the limit is keyed on.
 **The store is in memory, so the count is per process.** That matches the rest of this
 deployment — the audit log is a file on one volume — but scaling out multiplies the effective
 limit by the number of instances rather than sharing it.
+
+## Confirmation before irreversible and billable calls
+
+`EURODNS_CONFIRM` (`off`, `destructive`, `all`) makes a matching operation ask the caller to
+confirm, naming the operation and its target, before it runs. It is off by default: it changes
+what a tool call does, and a deployment that never asked for it should not start refusing
+calls after an upgrade.
+
+**It is a guard against accidents, not an authorisation check.** The answer is asserted by the
+client software and is never proven to have come from a person — a buggy or hostile client can
+answer yes on its own. That is why `EURODNS_ALLOW_DESTRUCTIVE` and `EURODNS_ALLOW_BILLING`
+still run first and still decide what is possible at all. Confirmation narrows what happens by
+mistake; it does not widen what is permitted.
+
+One deployment shape cannot use it. A **2025-era client on the HTTP transport** has no session
+for the exchange to travel over — serving there is per-request and stateless by construction —
+so those calls are refused rather than run unconfirmed. A client speaking the 2026-07-28
+revision carries the exchange in the request itself and works; so does stdio, which has a real
+session. If your clients are older and you cannot confirm, leave the variable unset rather than
+leaving calls failing.
+
+A declined confirmation is recorded in the audit log as `verdict: denied`, which is the row
+worth alerting on. The round that merely asks writes nothing — it is not an attempt.
 
 ## Verifying a deployment
 

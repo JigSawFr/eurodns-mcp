@@ -71,7 +71,21 @@ export function testConfig(overrides: Record<string, string> = {}): Config {
 }
 
 /** Connects a real MCP client to a real server over an in-memory transport pair. */
-export async function connect(options: { config?: Config; fetchImpl?: FetchLike } = {}) {
+export async function connect(
+  options: {
+    config?: Config;
+    fetchImpl?: FetchLike;
+    /**
+     * Answers a confirmation the server asks for. Supplying it also declares the client's
+     * elicitation capability, which is what the SDK gates the exchange on.
+     */
+    onElicit?: () => {
+      action: 'accept' | 'decline' | 'cancel';
+      // Elicitation content is primitives only, which is what the protocol allows.
+      content?: Record<string, string | number | boolean | string[]>;
+    };
+  } = {},
+) {
   const config = options.config ?? testConfig();
   const { server, toolCount } = buildServer({
     config,
@@ -79,7 +93,14 @@ export async function connect(options: { config?: Config; fetchImpl?: FetchLike 
     ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
   });
 
-  const client = new Client({ name: 'test-client', version: '0.0.0' });
+  const client = new Client(
+    { name: 'test-client', version: '0.0.0' },
+    options.onElicit ? { capabilities: { elicitation: {} } } : {},
+  );
+  if (options.onElicit) {
+    const answer = options.onElicit;
+    client.setRequestHandler('elicitation/create', () => answer());
+  }
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
 

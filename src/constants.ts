@@ -155,3 +155,12 @@ export const PAGINATION_HEADERS = {
  */
 export const DEFAULT_RATE_LIMIT = 300;
 export const DEFAULT_RATE_LIMIT_WINDOW_MS = 60_000;
+
+/**
+ * How long a client may reuse a `tools/list` or `server/discover` result.
+ *
+ * The surface is generated from a document vendored in the image, so it cannot change while
+ * the process lives. Five minutes bounds how long a client keeps a stale list after a
+ * deployment without making the cache pointless.
+ */
+export const TOOL_LIST_CACHE_MS = 5 * 60_000;

@@ -2,7 +2,7 @@
 import { serveStdio } from '@modelcontextprotocol/server/stdio';
 import { ConfigError, loadConfig } from './config.js';
 import { OnePasswordError, resolveEnvSecrets } from './secrets/index.js';
-import { SERVER_NAME, SERVER_VERSION, buildServer } from './server.js';
+import { SERVER_NAME, SERVER_VERSION, buildServer, hiddenClasses } from './server.js';
 import { AuditLogger } from './audit.js';
 
 /**
@@ -25,7 +25,11 @@ async function main(): Promise<void> {
   // serves both. Nothing here has to know which era the client speaks.
   serveStdio(() => buildServer({ config, transport: 'stdio', audit }).server);
 
-  process.stderr.write(`${SERVER_NAME} ${SERVER_VERSION} ready on stdio with ${toolCount} tools\n`);
+  const hidden = hiddenClasses(config);
+  process.stderr.write(
+    `${SERVER_NAME} ${SERVER_VERSION} ready on stdio with ${toolCount} tools` +
+      `${hidden.length ? ` (hidden: ${hidden.join(', ')})` : ''}\n`,
+  );
 }
 
 main().catch((error: unknown) => {
