@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.0](https://github.com/JigSawFr/eurodns-mcp/compare/v0.2.1...v0.3.0) (2026-08-27)
+
+
+### Features
+
+* **guardrails:** confirm before irreversible calls, and hide what is disabled ([#30](https://github.com/JigSawFr/eurodns-mcp/issues/30)) ([aed38a8](https://github.com/JigSawFr/eurodns-mcp/commit/aed38a8bc009e6cd246750c10c40f2fcd9a39e3e))
+
+
+### Bug fixes
+
+* announce the package version instead of a literal that drifted ([#31](https://github.com/JigSawFr/eurodns-mcp/issues/31)) ([90dc00a](https://github.com/JigSawFr/eurodns-mcp/commit/90dc00aaa7c15ea576b595ec0bcaeb847efbcc7c))
+
 ## [0.2.1](https://github.com/JigSawFr/eurodns-mcp/compare/v0.2.0...v0.2.1) (2026-08-27)
 
 
