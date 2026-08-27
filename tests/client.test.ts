@@ -99,6 +99,59 @@ describe('EuroDNS client', () => {
     expect(notFoundCalls).toBe(1);
   });
 
+  it('builds a query string, repeating an array and skipping what is empty', async () => {
+    const { fetchImpl, requests } = stubFetch(() => ({ body: [] }));
+    await new EuroDnsClient(upstream, fetchImpl).request({
+      method: 'GET',
+      path: '/domains',
+      query: {
+        status: ['active', 'pending'],
+        name: 'example.com',
+        // Each of these has to be dropped rather than sent as the string "undefined",
+        // "null" or an empty parameter the API would reject.
+        missing: undefined,
+        cleared: null,
+        blank: '',
+      },
+    });
+
+    const url = new URL(requests[0]?.url as string);
+    expect(url.searchParams.getAll('status')).toEqual(['active', 'pending']);
+    expect(url.searchParams.get('name')).toBe('example.com');
+    expect(url.searchParams.has('missing')).toBe(false);
+    expect(url.searchParams.has('cleared')).toBe(false);
+    expect(url.searchParams.has('blank')).toBe(false);
+  });
+
+  it('treats an empty body as no content, whatever the status says', async () => {
+    const { fetchImpl } = stubFetch(() => ({ status: 200, text: '' }));
+    const result = await new EuroDnsClient(upstream, fetchImpl).request({
+      method: 'GET',
+      path: '/tlds',
+    });
+
+    // A 200 with nothing in it is not a parse error; JSON.parse('') would make it one.
+    expect(result.data).toBeNull();
+  });
+
+  it('gives up after the last retry and says what went wrong', async () => {
+    let calls = 0;
+    const { fetchImpl } = stubFetch(() => {
+      calls += 1;
+      throw new Error('socket hang up');
+    });
+
+    await expect(
+      new EuroDnsClient({ ...upstream, maxRetries: 2 }, fetchImpl).request({
+        method: 'GET',
+        path: '/tlds',
+      }),
+    ).rejects.toThrow(/socket hang up/);
+
+    // The first attempt plus two retries — not two attempts, and not an endless loop.
+    expect(calls).toBe(3);
+  });
+
   it('treats 204 as an empty success rather than a parse failure', async () => {
     const { fetchImpl } = stubFetch(() => ({ status: 204 }));
     const response = await new EuroDnsClient(upstream, fetchImpl).request({

@@ -15,7 +15,7 @@ import { toNodeHandler } from '@modelcontextprotocol/node';
 import { ConfigError, loadConfig, type Config } from './config.js';
 import { OnePasswordError, resolveEnvSecrets } from './secrets/index.js';
 import { ALL_SCOPES } from './constants.js';
-import { SERVER_NAME, SERVER_VERSION, buildServer, hiddenClasses } from './server.js';
+import { SERVER_NAME, SERVER_VERSION, buildServer, startupLine } from './server.js';
 import { MetricsRegistry } from './metrics.js';
 import { AuditLogger } from './audit.js';
 import { installShutdown } from './shutdown.js';
@@ -295,11 +295,12 @@ async function main(): Promise<void> {
 
   const server = app.listen(port, host, () => {
     const { toolCount } = buildServer({ config, transport: 'http' });
-    const hidden = hiddenClasses(config);
     process.stderr.write(
-      `${SERVER_NAME} ${SERVER_VERSION} listening on http://${host}:${port}${MCP_ENDPOINT} ` +
-        `(auth: ${authMode}, ${toolCount} tools` +
-        `${hidden.length ? `, hidden: ${hidden.join(', ')}` : ''})\n`,
+      `${startupLine({
+        config,
+        toolCount,
+        endpoint: { url: `http://${host}:${port}${MCP_ENDPOINT}`, authMode },
+      })}\n`,
     );
   });
 

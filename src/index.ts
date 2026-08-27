@@ -2,7 +2,7 @@
 import { serveStdio } from '@modelcontextprotocol/server/stdio';
 import { ConfigError, loadConfig } from './config.js';
 import { OnePasswordError, resolveEnvSecrets } from './secrets/index.js';
-import { SERVER_NAME, SERVER_VERSION, buildServer, hiddenClasses } from './server.js';
+import { buildServer, startupLine } from './server.js';
 import { AuditLogger } from './audit.js';
 import { installShutdown } from './shutdown.js';
 
@@ -30,11 +30,7 @@ async function main(): Promise<void> {
   // collector is configured, whatever it has not received yet would be lost without this.
   installShutdown({ drain: () => audit.close() });
 
-  const hidden = hiddenClasses(config);
-  process.stderr.write(
-    `${SERVER_NAME} ${SERVER_VERSION} ready on stdio with ${toolCount} tools` +
-      `${hidden.length ? ` (hidden: ${hidden.join(', ')})` : ''}\n`,
-  );
+  process.stderr.write(`${startupLine({ config, toolCount })}\n`);
 }
 
 main().catch((error: unknown) => {
