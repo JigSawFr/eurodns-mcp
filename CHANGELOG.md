@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.4.0](https://github.com/JigSawFr/eurodns-mcp/compare/v0.3.1...v0.4.0) (2026-08-27)
+
+
+### Features
+
+* **audit:** ship the audit log to a collector as it is written ([#38](https://github.com/JigSawFr/eurodns-mcp/issues/38)) ([061e5b6](https://github.com/JigSawFr/eurodns-mcp/commit/061e5b6682f0e3a233cb8cbefb84072fc8010bdd))
+
+
+### Bug fixes
+
+* **deploy:** match the Fly config to the app that is running ([#36](https://github.com/JigSawFr/eurodns-mcp/issues/36)) ([c0d7516](https://github.com/JigSawFr/eurodns-mcp/commit/c0d7516a7962a8a98888c47789e10f219b57f749))
+* repair four defects found while reviewing the Fly config ([#37](https://github.com/JigSawFr/eurodns-mcp/issues/37)) ([bf1373b](https://github.com/JigSawFr/eurodns-mcp/commit/bf1373b2142f40b1ae7b8b31ab38792fb2fe4868))
+
+
+### Documentation
+
+* drop the vendor logo, document every variable, add an Entra ID guide ([#41](https://github.com/JigSawFr/eurodns-mcp/issues/41)) ([7072de9](https://github.com/JigSawFr/eurodns-mcp/commit/7072de9c05db62be2b0b745523393d66e2e53cc4))
+* split the README into docs/ and give it a proper header ([#39](https://github.com/JigSawFr/eurodns-mcp/issues/39)) ([a7d2180](https://github.com/JigSawFr/eurodns-mcp/commit/a7d2180359aaca71c01e41100c8d59b290bb76b0))
+
 ## [0.3.1](https://github.com/JigSawFr/eurodns-mcp/compare/v0.3.0...v0.3.1) (2026-08-27)
 
 
