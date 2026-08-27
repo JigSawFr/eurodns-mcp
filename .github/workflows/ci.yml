@@ -176,7 +176,9 @@ jobs:
             | python3 /tmp/mcp-read.py \
             | python3 -c 'import json,sys; print(len(json.load(sys.stdin)["tools"]))')
           echo "tools: $count"
-          [ "$count" -ge 80 ] || { echo "::error::expected the full tool surface, got $count"; exit 1; }
+          # Not the whole catalogue: this container enables neither billing nor irreversible
+          # operations, and those classes are hidden rather than advertised-and-refused.
+          [ "$count" -ge 60 ] || { echo "::error::expected the enabled tool surface, got $count"; exit 1; }
 
       # The whole point of the migration: the new revision served natively, on the same
       # endpoint, to a client that never sends `initialize`. A modern request is one carrying
@@ -198,9 +200,31 @@ jobs:
           discover=$(modern 'server/discover')
           echo "$discover" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert "resultType" in d and "supportedVersions" in d, d.keys(); print("discover:", ", ".join(sorted(d)))'
 
-          count=$(modern 'tools/list' | python3 -c 'import json,sys; print(len(json.load(sys.stdin)["tools"]))')
+          list=$(modern 'tools/list')
+          count=$(echo "$list" | python3 -c 'import json,sys; print(len(json.load(sys.stdin)["tools"]))')
           echo "modern tools: $count"
-          [ "$count" -ge 80 ] || { echo "::error::the modern path returned $count tools"; exit 1; }
+          [ "$count" -ge 60 ] || { echo "::error::the modern path returned $count tools"; exit 1; }
+
+          # Without a cache hint the SDK emits ttlMs 0, and a stateless deployment rebuilds
+          # the whole catalogue on every request.
+          echo "$list" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d.get("ttlMs",0)>0 and d.get("cacheScope")=="public", d; print("cache hint:", d["cacheScope"], d["ttlMs"])'
+
+      - name: A disabled risk class is not advertised
+        run: |
+          names=$(curl -fsS -X POST localhost:3000/mcp \
+            -H "Authorization: Bearer $TOKEN" \
+            -H 'Content-Type: application/json' \
+            -H 'Accept: application/json, text/event-stream' \
+            -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' \
+            | python3 /tmp/mcp-read.py \
+            | python3 -c 'import json,sys; print(" ".join(t["name"] for t in json.load(sys.stdin)["tools"]))')
+          # This container sets neither EURODNS_ALLOW_DESTRUCTIVE nor EURODNS_ALLOW_BILLING.
+          echo "$names" | grep -q 'eurodns_dns_get_zone' \
+            || { echo "::error::reads should still be listed"; exit 1; }
+          if echo "$names" | grep -qE 'eurodns_ssl_revoke_certificate|eurodns_premium_dns_renew_subscription'; then
+            echo "::error::a disabled risk class is still being advertised"; exit 1
+          fi
+          echo "disabled classes are absent from the listing"
 
       # Proves the audit log survives on the volume: the first query writes its own line and
       # sees nothing, the second reads that line back. This is also the only tool that needs

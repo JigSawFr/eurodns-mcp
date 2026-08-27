@@ -1,4 +1,9 @@
-import type { McpServer, AuthInfo } from '@modelcontextprotocol/server';
+import {
+  inputRequired,
+  inputResponse,
+  type McpServer,
+  type AuthInfo,
+} from '@modelcontextprotocol/server';
 import { z, type ZodRawShape } from 'zod';
 import {
   OPERATIONS,
@@ -11,6 +16,7 @@ import { formatJson, redactForAudit } from '../services/format.js';
 import { toolNameFor } from './naming.js';
 import { describeOperation } from './overrides.js';
 import type { CallerIdentity, ToolContext } from './context.js';
+import type { GuardrailConfig } from '../config.js';
 import { AUDIT_SCOPE, type RiskClass } from '../constants.js';
 import { AUDIT_QUERY_TOOL_NAME } from './auditNames.js';
 
@@ -186,12 +192,52 @@ function errorResult(message: string) {
   return { isError: true as const, content: [{ type: 'text' as const, text: message }] };
 }
 
+/**
+ * Whether a deployment advertises a tool it would run.
+ *
+ * A disabled risk class is hidden rather than advertised-and-refused. The refusal still
+ * exists — `evaluateGuardrails` is what actually enforces it, and a tool registered by
+ * another path still meets it — but a surface that lists eight destructive tools which can
+ * only ever answer "this is disabled" misdescribes the deployment and spends the model's
+ * attempts teaching it what the list already could have said.
+ */
+function isAdvertised(risk: RiskClass, guardrails: GuardrailConfig): boolean {
+  if (risk === 'read') return true;
+  if (guardrails.readOnly) return false;
+  if (risk === 'billing') return guardrails.allowBilling;
+  if (risk === 'destructive') return guardrails.allowDestructive;
+  return true;
+}
+
+/** The key the confirmation exchange is carried under, within one request's scope. */
+const CONFIRM_KEY = 'confirm';
+
+/** Whether this risk class has to be confirmed before it runs. */
+function needsConfirmation(risk: RiskClass, guardrails: GuardrailConfig): boolean {
+  if (guardrails.confirm === 'all') return risk === 'destructive' || risk === 'billing';
+  if (guardrails.confirm === 'destructive') return risk === 'destructive';
+  return false;
+}
+
+/**
+ * Whether this request can carry a confirmation exchange back to the caller.
+ *
+ * A 2026-07-28 request carries its own envelope, and the exchange rides the request itself —
+ * no session needed, so it works on the stateless HTTP transport. Anything else is 2025-era
+ * traffic, where the SDK's shim has to push a real server-to-client request: that needs a
+ * session, which a per-request stateless instance does not have. The SDK refuses there on its
+ * own, but with an error about protocol plumbing; refusing here instead says what a
+ * deployment can actually do about it.
+ */
+function canConfirm(context: ToolContext, envelopePresent: boolean): boolean {
+  return envelopePresent || context.sessionful;
+}
+
 export function registerGeneratedTools(server: McpServer, context: ToolContext): number {
   let registered = 0;
 
   for (const operation of OPERATIONS) {
-    // Read-only deployments do not advertise tools they would refuse to run.
-    if (context.config.guardrails.readOnly && operation.risk !== 'read') continue;
+    if (!isAdvertised(operation.risk, context.config.guardrails)) continue;
 
     registerOperation(server, context, operation);
     registered += 1;
@@ -224,24 +270,88 @@ function registerOperation(
     async (rawArgs, ctx) => {
       const args = (rawArgs ?? {}) as Record<string, unknown>;
       const identity = identityFrom(context, ctx?.http?.authInfo);
+      const target = auditTarget(args);
 
-      const span = context.audit.begin({
-        actor: identity.actor,
-        tool: name,
-        risk: operation.risk,
-        target: auditTarget(args),
-        params: auditParams(args),
-      });
+      /** Records a refusal. Kept as one step so a denial is never left unlogged. */
+      const deny = (reason: string) => {
+        const denied = context.audit.begin({
+          actor: identity.actor,
+          tool: name,
+          risk: operation.risk,
+          target,
+          params: auditParams(args),
+        });
+        denied.complete({ verdict: 'denied', reason });
+        return errorResult(reason);
+      };
 
       const decision = evaluateGuardrails(
         operation.risk,
         context.config.guardrails,
         identity.scopes,
       );
-      if (!decision.allowed) {
-        span.complete({ verdict: 'denied', reason: decision.reason });
-        return errorResult(decision.reason);
+      if (!decision.allowed) return deny(decision.reason);
+
+      if (needsConfirmation(operation.risk, context.config.guardrails)) {
+        const answer = inputResponse(ctx?.mcpReq?.inputResponses, CONFIRM_KEY);
+
+        if (answer.kind === 'elicit' && answer.action !== 'accept') {
+          const how = answer.action === 'decline' ? 'declined' : 'cancelled';
+          return deny(`Refused: the caller ${how} the confirmation.`);
+        }
+
+        // Asserted by the client, never proven to come from a person. This raises the bar on
+        // accidents; it is not an authorisation check, which is why the deployment switches
+        // above still run first and still decide what is possible at all.
+        const confirmed =
+          answer.kind === 'elicit' && (answer.content as { confirm?: unknown } | undefined)
+            ? (answer.content as { confirm?: unknown }).confirm === true
+            : false;
+
+        if (!confirmed) {
+          if (answer.kind === 'elicit') {
+            return deny('Refused: the confirmation came back without an explicit yes.');
+          }
+          if (!canConfirm(context, ctx?.mcpReq?.envelope !== undefined)) {
+            return deny(
+              `${name} needs confirmation before it runs, and this connection cannot carry ` +
+                'one: the request is 2025-era traffic on a stateless HTTP transport, which ' +
+                'has no session for the exchange to travel over. Connect a client speaking ' +
+                'the 2026-07-28 revision, use the stdio transport, or unset EURODNS_CONFIRM.',
+            );
+          }
+          return inputRequired({
+            inputRequests: {
+              [CONFIRM_KEY]: inputRequired.elicit({
+                message:
+                  `Run ${name}${target ? ` on ${target}` : ''}? ` +
+                  (operation.risk === 'billing'
+                    ? 'This creates a charge or extends a paid term.'
+                    : 'This cannot be undone.'),
+                requestedSchema: {
+                  type: 'object',
+                  properties: {
+                    confirm: {
+                      type: 'boolean',
+                      title: 'Confirm',
+                      description: `${operation.method} ${operation.path}`,
+                    },
+                  },
+                  required: ['confirm'],
+                },
+              }),
+            },
+          });
+        }
       }
+
+      const span = context.audit.begin({
+        actor: identity.actor,
+        tool: name,
+        risk: operation.risk,
+        target,
+        params: auditParams(args),
+      });
 
       try {
         const response = await context.client.request({

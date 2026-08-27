@@ -452,12 +452,25 @@ describe('both protocol eras on one endpoint', () => {
     expect(result).toHaveProperty('supportedVersions');
   });
 
-  it('serves the full tool surface over the modern path', async () => {
+  it('serves the tool surface the deployment allows over the modern path', async () => {
     const response = await modern(await tokenApp(), 'tools/list');
     const result = payload(response).result as { tools: unknown[] };
 
     expect(response.status).toBe(200);
-    expect(result.tools.length).toBeGreaterThanOrEqual(80);
+    // The default deployment enables neither billing nor irreversible operations, and those
+    // classes are hidden rather than advertised-and-refused — so this is not the whole
+    // catalogue. `tests/tools.test.ts` covers the full surface with both switches on.
+    expect(result.tools.length).toBeGreaterThanOrEqual(60);
+  });
+
+  it('carries a cache hint on the list result the SDK builds', async () => {
+    const response = await modern(await tokenApp(), 'tools/list');
+    const result = payload(response).result as { ttlMs?: number; cacheScope?: string };
+
+    // Without a hint the SDK emits `ttlMs: 0`, which makes every stateless request rebuild
+    // and reserialise the whole catalogue.
+    expect(result.ttlMs).toBeGreaterThan(0);
+    expect(result.cacheScope).toBe('public');
   });
 
   it('still serves a 2025-era client on the same endpoint', async () => {
