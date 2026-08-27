@@ -18,6 +18,7 @@ import { ALL_SCOPES } from './constants.js';
 import { SERVER_NAME, SERVER_VERSION, buildServer, hiddenClasses } from './server.js';
 import { MetricsRegistry } from './metrics.js';
 import { AuditLogger } from './audit.js';
+import { installShutdown } from './shutdown.js';
 import { toolScopeIndex } from './tools/registry.js';
 import { scopeGate } from './auth/scopeGate.js';
 import { JwtTokenVerifier, StaticTokenVerifier } from './auth/verifier.js';
@@ -35,6 +36,13 @@ export interface AppOptions {
   jwtKeyResolver?: JWTVerifyGetKey;
   /** Supplies the process-wide counters, so a test can inspect them. */
   metrics?: MetricsRegistry;
+  /**
+   * Supplies the process-wide audit logger.
+   *
+   * The entry point owns it so that shutdown can drain its forwarder; a test passes one
+   * built over a stubbed fetch to observe what would be shipped.
+   */
+  audit?: AuditLogger;
 }
 
 const MCP_ENDPOINT = '/mcp';
@@ -157,7 +165,7 @@ export async function createApp(
   // so anything that has to accumulate — counters, and the audit log's hash chain — must
   // outlive it. A logger per request would restart the chain on every call.
   const metrics = options.metrics ?? new MetricsRegistry();
-  const audit = new AuditLogger(config.audit, Date.now, metrics);
+  const audit = options.audit ?? new AuditLogger(config.audit, Date.now, metrics);
 
   // One factory, both protocol eras. `legacy: 'stateless'` is the default and is what keeps
   // 2025-era clients — which is still most of them — working against the same endpoint while
@@ -280,10 +288,12 @@ function registerMetricsEndpoint(
 
 async function main(): Promise<void> {
   const config = loadConfig(await resolveEnvSecrets(process.env), 'http');
-  const app = await createApp(config);
+  const metrics = new MetricsRegistry();
+  const audit = new AuditLogger(config.audit, Date.now, metrics);
+  const app = await createApp(config, { metrics, audit });
   const { host, port, authMode } = config.http;
 
-  app.listen(port, host, () => {
+  const server = app.listen(port, host, () => {
     const { toolCount } = buildServer({ config, transport: 'http' });
     const hidden = hiddenClasses(config);
     process.stderr.write(
@@ -291,6 +301,15 @@ async function main(): Promise<void> {
         `(auth: ${authMode}, ${toolCount} tools` +
         `${hidden.length ? `, hidden: ${hidden.join(', ')}` : ''})\n`,
     );
+  });
+
+  // Until now the process had no signal handling at all, which was survivable only because
+  // every audit write was synchronous. It is not any more: a platform that stops idle
+  // machines sends SIGTERM often, and whatever the forwarder still holds would go with it.
+  installShutdown({
+    onSignal: (signal) => process.stderr.write(`${SERVER_NAME} received ${signal}, draining\n`),
+    stopAccepting: () => server.close(),
+    drain: () => audit.close(),
   });
 }
 

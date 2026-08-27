@@ -58,6 +58,9 @@ export class MetricsRegistry {
   /** Risk class to accumulated seconds, and to observation count. */
   private readonly durationSum = new Map<string, number>();
   private readonly durationCount = new Map<string, number>();
+  /** Lines the collector never accepted, and lines dropped before it was tried. */
+  private auditForwardFailures = 0;
+  private auditForwardDropped = 0;
 
   constructor(now: () => number = Date.now) {
     this.startedAt = now();
@@ -77,6 +80,14 @@ export class MetricsRegistry {
       const status = observation.upstreamStatus;
       this.upstream.set(status, (this.upstream.get(status) ?? 0) + 1);
     }
+  }
+
+  recordAuditForwardFailure(): void {
+    this.auditForwardFailures += 1;
+  }
+
+  recordAuditForwardDrop(): void {
+    this.auditForwardDropped += 1;
   }
 
   render(context: RenderContext): string {
@@ -119,6 +130,24 @@ export class MetricsRegistry {
         `${PREFIX}_tool_duration_seconds_count{risk="${risk}"} ${this.durationCount.get(risk) ?? 0}`,
       );
     }
+
+    // Both are zero on a deployment that ships nothing, which is the honest reading: no
+    // collector configured means no lines failed to reach one. Either climbing means the
+    // second copy of the log has holes in it — invisible otherwise, since the collector
+    // looks the same whether it is idle or unreachable.
+    metric(
+      'audit_forward_failures_total',
+      'Audit lines a collector never accepted, after retries.',
+      'counter',
+    );
+    lines.push(`${PREFIX}_audit_forward_failures_total ${this.auditForwardFailures}`);
+
+    metric(
+      'audit_forward_dropped_total',
+      'Audit lines dropped from a full forward queue before any send was attempted.',
+      'counter',
+    );
+    lines.push(`${PREFIX}_audit_forward_dropped_total ${this.auditForwardDropped}`);
 
     // A log that stops growing is a log that stopped being written, which is worth an alert
     // of its own — and one approaching its ceiling is about to lose its older generation.

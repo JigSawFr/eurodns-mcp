@@ -9,7 +9,13 @@ import {
 } from 'node:fs';
 import { createHash, randomUUID } from 'node:crypto';
 import type { AuditConfig } from './config.js';
-import { AUDIT_FILE_MODE, ROTATED_SUFFIX, type RiskClass } from './constants.js';
+import { AuditForwarder } from './auditForwarder.js';
+import {
+  AUDIT_FILE_MODE,
+  AUDIT_FORWARD_DRAIN_MS,
+  ROTATED_SUFFIX,
+  type RiskClass,
+} from './constants.js';
 import type { MetricsRegistry } from './metrics.js';
 
 export { AUDIT_FILE_MODE, ROTATED_SUFFIX };
@@ -108,10 +114,31 @@ export class AuditLogger {
   private prevHash: string | null | undefined;
   private seq: number | undefined;
 
-  constructor(config: AuditConfig, now: () => number = Date.now, metrics?: MetricsRegistry) {
+  /** Ships each line to a collector as well, when one is configured. */
+  private readonly forwarder: AuditForwarder | undefined;
+
+  constructor(
+    config: AuditConfig,
+    now: () => number = Date.now,
+    metrics?: MetricsRegistry,
+    fetchImpl: typeof fetch = fetch,
+  ) {
     this.config = config;
     this.now = now;
     this.metrics = metrics;
+    this.forwarder = config.forward
+      ? new AuditForwarder(config.forward, metrics, fetchImpl)
+      : undefined;
+  }
+
+  /**
+   * Drains whatever has not reached the collector yet.
+   *
+   * Called on shutdown. A no-op when nothing is being shipped, which is why the entry
+   * points can call it unconditionally.
+   */
+  async close(timeoutMs: number = AUDIT_FORWARD_DRAIN_MS): Promise<void> {
+    await this.forwarder?.close(timeoutMs);
   }
 
   /**
@@ -187,7 +214,10 @@ export class AuditLogger {
    * answer to that, and the two measures are complementary rather than alternatives.
    */
   private write(line: Record<string, unknown>): void {
-    if (this.config.destination === 'none') return;
+    // `none` used to return here. It cannot any more: a deployment may record nothing
+    // locally and ship everything to a collector, and the chain has to advance either way
+    // for the shipped lines to verify.
+    if (this.config.destination === 'none' && this.forwarder === undefined) return;
 
     if (this.prevHash === undefined) this.resumeChain();
 
@@ -196,6 +226,10 @@ export class AuditLogger {
       seq: (this.seq as number) + 1,
       prev: this.prevHash,
     })}\n`;
+
+    // Byte-identical to what the local destination records, so the collector can re-verify
+    // the same hash chain. Synchronous and total — it queues and returns.
+    this.forwarder?.enqueue(serialized);
 
     switch (this.config.destination) {
       case 'stdout':

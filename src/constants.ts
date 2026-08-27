@@ -173,3 +173,25 @@ export const TOOL_LIST_CACHE_MS = 5 * 60_000;
  * something is wrong, one that sees a stale `0.1.0` does not.
  */
 export const UNKNOWN_VERSION = '0.0.0-unknown';
+
+/**
+ * Defaults for shipping audit lines to a collector.
+ *
+ * Sized so the common case costs one request every few seconds rather than one per call,
+ * and so a collector outage is survivable rather than fatal. The queue holds roughly ten
+ * minutes of a busy server at the default flush interval; past that the oldest lines are
+ * dropped, which is acceptable only because the local destination still has them.
+ */
+export const DEFAULT_AUDIT_FORWARD_BATCH = 100;
+export const DEFAULT_AUDIT_FORWARD_INTERVAL_MS = 5_000;
+export const DEFAULT_AUDIT_FORWARD_QUEUE = 10_000;
+export const DEFAULT_AUDIT_FORWARD_RETRIES = 3;
+export const DEFAULT_AUDIT_FORWARD_BACKOFF_MS = 250;
+
+/**
+ * How long shutdown waits for the forwarder to drain.
+ *
+ * A platform that stops idle machines sends SIGTERM often, and it will not wait forever:
+ * hanging on an unreachable collector only delays a kill that was coming anyway.
+ */
+export const AUDIT_FORWARD_DRAIN_MS = 5_000;

@@ -4,6 +4,7 @@ import { ConfigError, loadConfig } from './config.js';
 import { OnePasswordError, resolveEnvSecrets } from './secrets/index.js';
 import { SERVER_NAME, SERVER_VERSION, buildServer, hiddenClasses } from './server.js';
 import { AuditLogger } from './audit.js';
+import { installShutdown } from './shutdown.js';
 
 /**
  * stdio entry point.
@@ -24,6 +25,10 @@ async function main(): Promise<void> {
   // 2026-07-28 or 2025, one instance is pinned for its lifetime, and the same factory
   // serves both. Nothing here has to know which era the client speaks.
   serveStdio(() => buildServer({ config, transport: 'stdio', audit }).server);
+
+  // The parent decides when this process ends, and on stdio that is usually a signal. If a
+  // collector is configured, whatever it has not received yet would be lost without this.
+  installShutdown({ drain: () => audit.close() });
 
   const hidden = hiddenClasses(config);
   process.stderr.write(

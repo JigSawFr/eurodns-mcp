@@ -108,14 +108,60 @@ is dedicated to you. For an allowlist-based control, that is the guarantee that 
 The log is JSON lines, one object per event, already in the shape an ingestion pipeline
 wants. There is no formatting to do — only a transport to pick.
 
-| Approach                                                            | Code to write | When it is the right one                                                |
-| ------------------------------------------------------------------- | ------------- | ----------------------------------------------------------------------- |
-| `EURODNS_AUDIT_DESTINATION=stdout` and the platform's log drain     | none          | Fly, Render and Railway all forward raw stdout to an external collector |
-| A file, tailed by a collector (Vector, Fluent Bit, Filebeat, Alloy) | none          | Kubernetes, a VM, anywhere a sidecar is possible                        |
+| Approach                                                            | Configuration                      | When it is the right one                                                |
+| ------------------------------------------------------------------- | ---------------------------------- | ----------------------------------------------------------------------- |
+| The platform's log drain                                            | `EURODNS_AUDIT_DESTINATION=stdout` | Fly, Render and Railway all forward raw stdout to an external collector |
+| A file, tailed by a collector (Vector, Fluent Bit, Filebeat, Alloy) | `EURODNS_AUDIT_DESTINATION=file`   | Kubernetes, a VM, anywhere a sidecar is possible                        |
+| The server posts to the collector itself                            | `EURODNS_AUDIT_FORWARD_URL`        | No log drain to hand, or the history tool has to keep working           |
 
-Try the first before writing anything: `stdout` exists precisely because it is the channel
-every container platform knows how to relay. Under stdio it is refused, because there stdout
-carries the JSON-RPC stream — use a file.
+Try the first two before the third: they cost no configuration in this server at all, and
+`stdout` exists precisely because it is the channel every container platform knows how to
+relay. Under stdio it is refused, because there stdout carries the JSON-RPC stream — use a
+file.
+
+### When the server ships the lines itself
+
+The reason to reach for this is narrow but real: **`EURODNS_AUDIT_QUERY` requires the `file`
+destination**, because the history tool can only read a file. So `stdout` plus a log drain
+means giving up `eurodns_audit_query`. Forwarding is additive rather than a destination of
+its own, so the file and the collector both get every line and nothing is given up.
+
+```bash
+EURODNS_AUDIT_DESTINATION=file
+EURODNS_AUDIT_FILE=/data/audit.jsonl
+EURODNS_AUDIT_QUERY=all
+
+EURODNS_AUDIT_FORWARD_URL=https://collector.example/ingest
+EURODNS_AUDIT_FORWARD_TOKEN=…        # optional; sent as `Authorization: Bearer …`
+```
+
+The request body is `application/x-ndjson`: the lines **exactly as written locally**, one per
+line, with their `seq` and `prev` intact — so the collector can re-verify the same hash chain
+rather than having to trust what it was sent.
+
+| Variable                            | Default | What it does                                                                 |
+| ----------------------------------- | ------- | ---------------------------------------------------------------------------- |
+| `EURODNS_AUDIT_FORWARD_URL`         | —       | Where to post. Must be `https`, except on a loopback address                 |
+| `EURODNS_AUDIT_FORWARD_TOKEN`       | —       | Bearer credential. May be an `op://` reference like any `EURODNS_*` variable |
+| `EURODNS_AUDIT_FORWARD_BATCH`       | 100     | Lines per request; a full batch is sent without waiting                      |
+| `EURODNS_AUDIT_FORWARD_INTERVAL_MS` | 5000    | How long a partial batch waits                                               |
+| `EURODNS_AUDIT_FORWARD_QUEUE`       | 10000   | Lines held while the collector is unreachable                                |
+
+Queuing never blocks a tool call and never fails one. When the queue fills, the **oldest**
+lines are dropped — acceptable only because the local destination still holds them. Both
+outcomes are counted, and a collector that has quietly stopped receiving is otherwise
+indistinguishable from one with nothing to report:
+
+```
+eurodns_mcp_audit_forward_failures_total   # lines a collector never accepted, after retries
+eurodns_mcp_audit_forward_dropped_total    # lines dropped from a full queue
+```
+
+Alert on either being non-zero.
+
+On `SIGTERM` and `SIGINT` the server stops listening, drains whatever the forwarder still
+holds under a five-second deadline, then exits. This matters on a platform that stops idle
+machines: without it the tail of the log would be lost on every stop.
 
 **Do not poll the server for this.** `eurodns_audit_query` answers a question in
 conversation; it is not an ingestion API, and it reads only a bounded window from the end of
