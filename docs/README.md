@@ -18,6 +18,7 @@ it.
 | [HTTP transport](http-transport.md) | Serving several clients, static tokens, OAuth 2.1 and scopes        |
 | [Secrets](secrets.md)               | Keeping the API key out of a client config, and 1Password Connect   |
 | [Audit log](audit-log.md)           | What is recorded, the hash chain, asking the server what happened   |
+| [Entra ID](entra-id.md)             | Step-by-step OAuth with Microsoft Entra ID, and its pitfalls        |
 | [Deploying](../deploy/README.md)    | Containers, Fly.io, Render, Railway, and shipping the log to a SIEM |
 
 ## Working on it
