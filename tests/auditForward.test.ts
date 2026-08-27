@@ -6,6 +6,7 @@ import { createHash } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AuditLogger, hashLine } from '../src/audit.js';
 import { loadConfig, ConfigError, type AuditForwardConfig } from '../src/config.js';
+import { MetricsRegistry } from '../src/metrics.js';
 
 const COLLECTOR = 'https://collector.example/ingest';
 
@@ -146,12 +147,9 @@ describe('shipping the audit log to a collector', () => {
       throw new Error('connection refused');
     }) as unknown as typeof fetch;
 
-    const drops: number[] = [];
-    const metrics = {
-      recordCall: () => undefined,
-      recordAuditForwardDrop: () => drops.push(1),
-      recordAuditForwardFailure: () => undefined,
-    };
+    // The real registry, not a stub: what matters to an operator is the number that comes
+    // out of /metrics, and a stub would assert the call rather than the reading.
+    const metrics = new MetricsRegistry(() => 0);
 
     const logger = new AuditLogger(
       {
@@ -161,7 +159,7 @@ describe('shipping the audit log to a collector', () => {
         forward: forwardConfig({ batch: 1_000, queue: 5, intervalMs: 600_000 }),
       },
       () => Date.parse('2026-01-01T00:00:00Z'),
-      metrics as never,
+      metrics,
       impl,
     );
 
@@ -169,8 +167,85 @@ describe('shipping the audit log to a collector', () => {
     for (let i = 0; i < 20; i += 1) record(logger, `t${i}`);
 
     // 20 calls, each writing one completed line, 5 kept: 15 dropped.
-    expect(drops).toHaveLength(15);
+    const rendered = () => metrics.render({ version: '0.0.0', toolCount: 0 });
+    expect(rendered()).toContain('eurodns_mcp_audit_forward_dropped_total 15');
+
     await logger.close(50);
+
+    // The five that survived the queue then failed to send, and are counted separately:
+    // a full queue and an unreachable collector are different problems.
+    expect(failures.length).toBeGreaterThan(0);
+    expect(rendered()).toContain('eurodns_mcp_audit_forward_failures_total 5');
+  });
+
+  it('retries a 5xx and gives up on a 4xx, which will not fix itself', async () => {
+    const seen: number[] = [];
+    const responses = [500, 503, 204];
+    const impl = vi.fn(async () => {
+      const status = responses[seen.length] ?? 204;
+      seen.push(status);
+      return new Response(null, { status });
+    }) as unknown as typeof fetch;
+
+    const retrying = new AuditLogger(
+      {
+        destination: 'none',
+        query: 'off',
+        maxBytes: 0,
+        forward: forwardConfig({ maxRetries: 3, backoffMs: 1 }),
+      },
+      () => Date.parse('2026-01-01T00:00:00Z'),
+      undefined,
+      impl,
+    );
+    record(retrying, 'flaky_collector');
+    await retrying.close(2_000);
+
+    expect(seen).toEqual([500, 503, 204]);
+
+    // A 400 is a misconfiguration. Sending it again only delays the report.
+    const rejected: number[] = [];
+    const refusing = vi.fn(async () => {
+      rejected.push(400);
+      return new Response(null, { status: 400 });
+    }) as unknown as typeof fetch;
+
+    const metrics = new MetricsRegistry(() => 0);
+    const giving = new AuditLogger(
+      {
+        destination: 'none',
+        query: 'off',
+        maxBytes: 0,
+        forward: forwardConfig({ maxRetries: 5, backoffMs: 1 }),
+      },
+      () => Date.parse('2026-01-01T00:00:00Z'),
+      metrics,
+      refusing,
+    );
+    record(giving, 'misconfigured');
+    await giving.close(2_000);
+
+    expect(rejected).toHaveLength(1);
+    expect(metrics.render({ version: '0.0.0', toolCount: 0 })).toContain(
+      'eurodns_mcp_audit_forward_failures_total 1',
+    );
+  });
+
+  it('gives up on the deadline rather than hanging on a collector that never answers', async () => {
+    // Never resolves. Without the deadline in close(), shutdown would wait for SIGKILL.
+    const impl = vi.fn(() => new Promise<Response>(() => undefined)) as unknown as typeof fetch;
+    const logger = new AuditLogger(
+      { destination: 'none', query: 'off', maxBytes: 0, forward: forwardConfig() },
+      () => Date.parse('2026-01-01T00:00:00Z'),
+      undefined,
+      impl,
+    );
+
+    record(logger, 'into_the_void');
+    const startedAt = Date.now();
+    await logger.close(60);
+
+    expect(Date.now() - startedAt).toBeLessThan(2_000);
   });
 
   it('does nothing at all when no collector is configured', async () => {
