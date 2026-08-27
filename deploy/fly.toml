@@ -1,53 +1,37 @@
-# Fly.io deployment.
+# fly.toml app configuration file generated for eurodns-mcp on 2026-08-27T13:07:12Z
 #
-#   cp deploy/fly.toml fly.toml     # then edit `app`, and deploy from the repository root
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
-# Copy it rather than pointing at it in place: Fly builds from the working directory, so a
-# config living in deploy/ would make deploy/ the build context — and the sources are not
-# there. With the file at the root, Fly finds the Dockerfile on its own.
-#
-# Fly is the recommended host for one reason: the EuroDNS API filters by source IP, and a
-# dedicated egress IPv4 costs a couple of dollars a month here against roughly $100
-# elsewhere. See deploy/README.md for allocating it.
 
 app = 'eurodns-mcp'
-primary_region = 'cdg' # Paris. 'ams' and 'fra' are equally close to Luxembourg.
+primary_region = 'ams'
+
+[build]
 
 [env]
-HOST = '0.0.0.0'
-PORT = '3000'
-EURODNS_AUDIT_DESTINATION = 'file'
-EURODNS_AUDIT_FILE = '/data/audit.jsonl'
+  EURODNS_AUDIT_DESTINATION = 'file'
+  EURODNS_AUDIT_FILE = '/data/audit.jsonl'
+  HOST = '0.0.0.0'
+  PORT = '3000'
 
-# A Fly volume attaches to one machine, so this deployment is single-instance. Scaling out
-# means giving up the file-based audit log for a collector — and with it the history query
-# tool, which can only read a file.
-[mounts]
-source = 'eurodns_audit'
-destination = '/data'
-# Creates the volume on the first launch, so a deployment started from the Fly dashboard —
-# which has no field for one — does not fail on a mount whose volume does not exist. Only
-# `fly launch` and `fly deploy` read it; `fly volumes create` ignores it, so allocating the
-# volume by hand still works and still wins.
-#
-# 1 GB is sized for the audit log, which rotates at EURODNS_AUDIT_MAX_BYTES (64 MB) and keeps
-# two generations.
-initial_size = '1gb'
+[[mounts]]
+  source = 'data'
+  destination = '/data'
 
 [http_service]
-internal_port = 3000
-force_https = true
-auto_stop_machines = 'stop'
-auto_start_machines = true
-min_machines_running = 0
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 0
 
-[[http_service.checks]]
-interval = '30s'
-timeout = '3s'
-grace_period = '10s'
-method = 'GET'
-path = '/healthz'
+  [[http_service.checks]]
+    interval = '30s'
+    timeout = '3s'
+    grace_period = '10s'
+    method = 'GET'
+    path = '/healthz'
 
 [[vm]]
-size = 'shared-cpu-1x'
-memory = '512mb'
+  size = 'shared-cpu-1x'
+  memory = '512mb'
