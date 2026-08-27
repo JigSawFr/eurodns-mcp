@@ -1,4 +1,5 @@
 import { McpServer } from '@modelcontextprotocol/server';
+import { createRequire } from 'node:module';
 import { userInfo } from 'node:os';
 import { AuditLogger, type AuditActor } from './audit.js';
 import type { Config } from './config.js';
@@ -8,10 +9,32 @@ import { registerDnsTools } from './tools/dns.js';
 import { registerGeneratedTools } from './tools/registry.js';
 import type { ToolContext } from './tools/context.js';
 import type { MetricsRegistry } from './metrics.js';
-import { TOOL_LIST_CACHE_MS } from './constants.js';
+import { TOOL_LIST_CACHE_MS, UNKNOWN_VERSION } from './constants.js';
 
 export const SERVER_NAME = 'eurodns-mcp-server';
-export const SERVER_VERSION = '0.1.0';
+
+/**
+ * The version the server announces, taken from the package rather than repeated here.
+ *
+ * A second place to keep in step always drifts, and this one already had: the literal stayed
+ * at `0.1.0` while the package reached 0.2.1, so the MCP handshake and
+ * `eurodns_mcp_build_info` both reported a version that had not shipped for two releases.
+ *
+ * `rootDir: "src"` rules out a static `import '../package.json'`, hence `createRequire`. The
+ * relative path holds in all three layouts because `src/` and `dist/` both sit one level
+ * under the package root: running from source, from the published package, and from the
+ * image, where the Dockerfile puts `package.json` in `/app` and the build in `/app/dist`.
+ */
+function readPackageVersion(): string {
+  try {
+    const pkg = createRequire(import.meta.url)('../package.json') as { version?: unknown };
+    return typeof pkg.version === 'string' && pkg.version ? pkg.version : UNKNOWN_VERSION;
+  } catch {
+    return UNKNOWN_VERSION;
+  }
+}
+
+export const SERVER_VERSION = readPackageVersion();
 
 export interface BuildOptions {
   config: Config;

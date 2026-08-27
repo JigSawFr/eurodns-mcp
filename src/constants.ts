@@ -164,3 +164,12 @@ export const DEFAULT_RATE_LIMIT_WINDOW_MS = 60_000;
  * deployment without making the cache pointless.
  */
 export const TOOL_LIST_CACHE_MS = 5 * 60_000;
+
+/**
+ * Reported when the package version cannot be read.
+ *
+ * Deliberately not a plausible number. Falling back to a credible-looking version would
+ * reproduce the defect this replaces: a monitoring system that sees `0.0.0-unknown` knows
+ * something is wrong, one that sees a stale `0.1.0` does not.
+ */
+export const UNKNOWN_VERSION = '0.0.0-unknown';

@@ -4,6 +4,9 @@ import { createApp } from '../src/http.js';
 import { loadConfig, ConfigError, type Config } from '../src/config.js';
 import { MetricsRegistry } from '../src/metrics.js';
 import { stubFetch } from './harness.js';
+import { readFile } from 'node:fs/promises';
+import { SERVER_VERSION } from '../src/server.js';
+import { UNKNOWN_VERSION } from '../src/constants.js';
 
 const METRICS_TOKEN = 'm'.repeat(48);
 const MCP_TOKEN = 'k'.repeat(48);
@@ -161,5 +164,29 @@ describe('metrics endpoint', () => {
 
     const text = registry.render({ version: '1.0.0', toolCount: 1 });
     expect(text).toContain('tool="weird\\"name\\\\here"');
+  });
+});
+
+describe('the version the server announces', () => {
+  it('is the package version, not a literal that drifts', async () => {
+    const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8')) as {
+      version: string;
+    };
+
+    // This is the whole point of reading it at runtime, and the assertion that turns a broken
+    // path into a failing build rather than a silent fallback.
+    expect(SERVER_VERSION).toBe(pkg.version);
+    expect(SERVER_VERSION).not.toBe(UNKNOWN_VERSION);
+  });
+
+  it('labels build_info with that same version', async () => {
+    const app = await createApp(httpConfig({ EURODNS_METRICS_TOKEN: METRICS_TOKEN }));
+    const response = await request(app)
+      .get('/metrics')
+      .set('Authorization', `Bearer ${METRICS_TOKEN}`);
+
+    // The metric an operator reads to know which version is deployed. It reported 0.1.0 for
+    // two releases, which is worse than reporting nothing.
+    expect(response.text).toContain(`eurodns_mcp_build_info{version="${SERVER_VERSION}"} 1`);
   });
 });
