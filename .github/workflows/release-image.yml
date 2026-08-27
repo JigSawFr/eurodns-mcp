@@ -20,8 +20,8 @@ on:
     inputs:
       tag:
         description: >-
-          Git tag to build, for example v0.2.0. Whatever is built is also tagged `latest`,
-          so dispatching an older tag moves `latest` backwards.
+          Git tag to build, for example v0.2.0. A non-prerelease tag also takes `latest`,
+          so dispatching an older one moves `latest` backwards.
         required: true
         type: string
 
@@ -63,7 +63,6 @@ jobs:
             type=semver,pattern={{major}}.{{minor}},value=${{ inputs.tag }}
             type=semver,pattern={{major}},value=${{ inputs.tag }}
             type=sha,format=long
-            type=raw,value=latest
 
       - id: build
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
@@ -78,7 +77,14 @@ jobs:
 
       # The server handles DNS credentials; a verifiable link from image to source is
       # proportionate and costs one step.
-      - uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
+      #
+      # Gated on visibility for the same reason as the CodeQL workflow: the attestation API
+      # answers "Feature not available for user-owned private repositories", which failed the
+      # first v0.2.0 run after the image had already been pushed. Keeping the step and
+      # skipping it means it starts working the day the repository is published, rather than
+      # being forgotten in a branch.
+      - if: github.event.repository.visibility == 'public'
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           subject-digest: ${{ steps.build.outputs.digest }}
