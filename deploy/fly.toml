@@ -25,6 +25,14 @@ EURODNS_AUDIT_FILE = '/data/audit.jsonl'
 [mounts]
 source = 'eurodns_audit'
 destination = '/data'
+# Creates the volume on the first launch, so a deployment started from the Fly dashboard —
+# which has no field for one — does not fail on a mount whose volume does not exist. Only
+# `fly launch` and `fly deploy` read it; `fly volumes create` ignores it, so allocating the
+# volume by hand still works and still wins.
+#
+# 1 GB is sized for the audit log, which rotates at EURODNS_AUDIT_MAX_BYTES (64 MB) and keeps
+# two generations.
+initial_size = '1gb'
 
 [http_service]
 internal_port = 3000
