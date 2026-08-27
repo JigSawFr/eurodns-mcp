@@ -106,7 +106,7 @@ the server itself, such as Claude Desktop:
   "mcpServers": {
     "eurodns": {
       "command": "npx",
-      "args": ["-y", "github:JigSawFr/eurodns-mcp"],
+      "args": ["-y", "-p", "github:JigSawFr/eurodns-mcp", "eurodns-mcp"],
       "env": {
         "EURODNS_APP_ID": "your-application-id",
         "EURODNS_API_KEY": "your-api-key"
@@ -119,8 +119,16 @@ the server itself, such as Claude Desktop:
 To try it in a terminal first:
 
 ```bash
-npx -y github:JigSawFr/eurodns-mcp
+npx -y -p github:JigSawFr/eurodns-mcp eurodns-mcp
 ```
+
+`-p … eurodns-mcp` names the command to run. Without it npm looks for a command matching the
+package name, `eurodns-mcp-server`, finds two that do not match, and refuses to guess:
+`could not determine executable to run`. `eurodns-mcp-http` is the other one, for the HTTP
+transport.
+
+Installing this way clones the repository and builds it, so it needs read access — until the
+repository is public, that means being signed in to a git account that has it.
 
 For a shared deployment over HTTP, use the container instead — see
 [Deployment](#deployment).
@@ -267,7 +275,7 @@ export EURODNS_API_KEY="$(security find-generic-password -s eurodns-api-key -w)"
 # Windows (PowerShell, with the SecretManagement module):
 #   $env:EURODNS_API_KEY = Get-Secret -Name eurodns-api-key -AsPlainText
 
-exec npx -y github:JigSawFr/eurodns-mcp
+exec npx -y -p github:JigSawFr/eurodns-mcp eurodns-mcp
 ```
 
 Store the secrets once with, for example,
