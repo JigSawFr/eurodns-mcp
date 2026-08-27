@@ -20,7 +20,7 @@ export EURODNS_API_KEY="$(security find-generic-password -s eurodns-api-key -w)"
 # Windows (PowerShell, with the SecretManagement module):
 #   $env:EURODNS_API_KEY = Get-Secret -Name eurodns-api-key -AsPlainText
 
-exec npx -y github:JigSawFr/eurodns-mcp
+exec npx -y -p github:JigSawFr/eurodns-mcp eurodns-mcp
 ```
 
 Store the secrets once with, for example,

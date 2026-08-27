@@ -1,17 +1,19 @@
 # Fly.io deployment.
 #
-#   cp deploy/fly.toml fly.toml     # then edit `app`, and deploy from the repository root
-#
-# Copy it rather than pointing at it in place: Fly builds from the working directory, so a
-# config living in deploy/ would make deploy/ the build context — and the sources are not
-# there. With the file at the root, Fly finds the Dockerfile on its own.
+# Fly builds from the working directory it is invoked in, and finds the Dockerfile there. A
+# config kept under deploy/ therefore has to be pointed at explicitly — `fly deploy -c
+# deploy/fly.toml` from the repository root — or moved to the root, where `fly deploy` picks
+# it up on its own.
 #
 # Fly is the recommended host for one reason: the EuroDNS API filters by source IP, and a
 # dedicated egress IPv4 costs a couple of dollars a month here against roughly $100
 # elsewhere. See deploy/README.md for allocating it.
 
 app = 'eurodns-mcp'
-primary_region = 'cdg' # Paris. 'ams' and 'fra' are equally close to Luxembourg.
+
+# Any region works; pick one close to the clients. This one matches the app currently
+# deployed from this file — changing it here does not move a machine that already exists.
+primary_region = 'ams'
 
 [env]
 HOST = '0.0.0.0'
@@ -22,8 +24,17 @@ EURODNS_AUDIT_FILE = '/data/audit.jsonl'
 # A Fly volume attaches to one machine, so this deployment is single-instance. Scaling out
 # means giving up the file-based audit log for a collector — and with it the history query
 # tool, which can only read a file.
-[mounts]
-source = 'eurodns_audit'
+#
+# Double brackets: TOML reads `[[mounts]]` as an array of tables, which is what Fly expects
+# and what a second volume would need. A single `[mounts]` works for one mount and fails to
+# parse the moment another is added.
+[[mounts]]
+# Named for the mount point rather than the app: launching from the Fly dashboard creates
+# the volume from `destination`, ignoring `source`, and the name it chose is the one the
+# running machine is attached to. A different name here would create a second, empty volume
+# on the next deploy and mount that one instead — losing sight of the existing log without
+# reporting an error.
+source = 'data'
 destination = '/data'
 # Creates the volume on the first launch, so a deployment started from the Fly dashboard —
 # which has no field for one — does not fail on a mount whose volume does not exist. Only
