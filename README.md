@@ -4,18 +4,30 @@
 
 **Manage your domains, DNS zones and subscriptions by asking for it.**
 
-A [Model Context Protocol](https://modelcontextprotocol.io) server for the EuroDNS User API —
-domains, DNS zones, contacts, subscriptions, SSL, invoices and orders.
+<p>
+  <sub>A <a href="https://modelcontextprotocol.io">Model Context Protocol</a> server for the</sub>
+  <br />
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/eurodns-logo-white.svg" />
+    <img src="docs/assets/eurodns-logo.svg" alt="EuroDNS" height="24" />
+  </picture>
+  <br />
+  <sub>User API — domains, DNS zones, contacts, subscriptions, SSL, invoices and orders.</sub>
+</p>
 
 [![CI](https://github.com/JigSawFr/eurodns-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/JigSawFr/eurodns-mcp/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%E2%89%A522-brightgreen.svg)](package.json)
 [![MCP](https://img.shields.io/badge/MCP-2026--07--28-8A63D2.svg)](https://modelcontextprotocol.io/specification/2026-07-28)
+[![Image](https://img.shields.io/badge/ghcr.io-eurodns--mcp-2496ED.svg)](https://github.com/JigSawFr/eurodns-mcp/pkgs/container/eurodns-mcp)
+
+**[Documentation](docs/README.md)** · [Tools](docs/tools.md) · [Guardrails](docs/guardrails.md) · [Deploying](deploy/README.md)
 
 </div>
 
 > This is an independent open-source project. It is **not affiliated with, endorsed by, or
-> supported by EuroDNS**. "EuroDNS" is used only to identify the API this server talks to.
+> supported by EuroDNS**. The EuroDNS name and logo are trademarks of EuroDNS S.A., shown
+> here only to identify the API this server talks to.
 
 > Written by a professional engineer with AI assistance. Every line was reviewed before it
 > was committed, and the responsibility for what it does is human.
@@ -66,26 +78,6 @@ what the deployment permits at all, then what the caller's scopes permit within 
 audit log is fed by **every** path, including refusals, because the upstream API
 authenticates every caller with one shared key and cannot attribute anything itself.
 
-## Protocol revisions
-
-The server speaks the **2026-07-28** revision — a stateless core, header-based routing,
-cacheable list results — and answers 2025-era clients on the same endpoint without any
-configuration. That matters because the two eras handshake differently: 2026-07-28 removed
-`initialize` in favour of `server/discover`, so a 2025 client's handshake is what identifies
-it. Nothing is stranded, and nothing has to be chosen up front.
-
-One consequence is worth knowing before you point a client at it. Answers on the 2025-era
-path now arrive as a **single SSE frame** rather than a plain JSON body, so the endpoint
-requires the `Accept` header streamable HTTP has always specified:
-
-```
-Accept: application/json, text/event-stream
-```
-
-A client sending only `application/json` — or `*/*` — is answered `406`. Every conforming
-MCP client already sends both; a hand-rolled `curl` probe usually does not, and that is the
-one thing that will surprise you.
-
 ## Requirements
 
 - Node.js 22 or newer. Node 20 reached end of life on 30 April 2026 and receives no
@@ -130,8 +122,10 @@ transport.
 Installing this way clones the repository and builds it, so it needs read access — until the
 repository is public, that means being signed in to a git account that has it.
 
-For a shared deployment over HTTP, use the container instead — see
-[Deployment](#deployment).
+For a shared deployment over HTTP, use the container instead — see [Deployment](#deployment).
+
+Try not to put the API key in the client config file: [Secrets](docs/secrets.md) shows two
+ways around it.
 
 ## What you can ask it
 
@@ -147,331 +141,19 @@ For a shared deployment over HTTP, use the container instead — see
 | "What did I change last week?"                        | `eurodns_audit_query`                 |
 | "What was refused, and why?"                          | `eurodns_audit_query`                 |
 
-## Tools
-
-79 tools are generated from the OpenAPI document, plus three hand-written DNS workflow tools
-and, when enabled, the history query.
-
-| Area                 | Tools | Covers                                                      |
-| -------------------- | ----: | ----------------------------------------------------------- |
-| `dns`                |    16 | Zones, records, zone profiles, snapshots, DNSSEC signing    |
-| `ssl`                |    13 | Subscriptions, certificates, validation, reissue, revoke    |
-| `email`              |     8 | Mailbox subscriptions, aliases, catch-all, passwords        |
-| `premium_dns`        |     8 | Premium DNS subscriptions and their lifecycle               |
-| `contact`            |     6 | Reusable contact profiles and their default states          |
-| `domain`             |     5 | Domain lookup, search, availability, DNSSEC at the registry |
-| `nameserver`         |     5 | Reusable nameserver profiles                                |
-| `https_redirect`     |     4 | HTTPS redirect subscriptions                                |
-| `tld`                |     2 | TLD terms and requirements                                  |
-| `invoice`            |     2 | Invoice lookup and search                                   |
-| `invoice_profile`    |     2 | Customer invoice profiles                                   |
-| `order`              |     2 | Orders and per-line delivery status                         |
-| `subscription`       |     2 | Cross-product search, auto-renewal settings                 |
-| `microsoft`          |     2 | Microsoft subscriptions                                     |
-| `account`            |     1 | Prepaid balance                                             |
-| `contact_validation` |     1 | Resending contact validation email                          |
-
-Every tool name is prefixed with `eurodns_` so it cannot collide with another server's, and
-carries `readOnlyHint`, `destructiveHint` and `idempotentHint` annotations derived from what
-the operation actually does.
-
-## The DNS workflow tools
-
-`PUT /dns-zones/{domain}` replaces the **entire** zone document: a caller that sends a
-partial zone silently deletes everything it left out. Three tools exist so that never
-happens by accident.
-
-| Tool                        | What it does                                                                                                 |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `eurodns_dns_diff_zone`     | Reports what a proposed record set would change. Writes nothing.                                             |
-| `eurodns_dns_upsert_record` | Reads the zone, applies one change, validates it with the API, and saves only if validation passes.          |
-| `eurodns_dns_delete_record` | Resolves a record's id from its type and host, then deletes it. Refuses to guess when several records match. |
-
-The raw generated tools (`eurodns_dns_save_zone`, `eurodns_dns_add_records`,
-`eurodns_dns_delete_record_by_id`) remain available for callers that know exactly what they
-are doing.
-
-Three details worth knowing, all of which this server enforces for you:
-
-- The record value field is **`rdata`**, not `data`. Sending `data` fails with an opaque
-  "unexpected technical error".
-- TTL accepts only twelve values: 600, 900, 1800, 3600, 7200, 14400, 21600, 43200, 86400,
-  172800, 432000, 604800.
-- `MAIL` and `URL` are **not** record types. They are pseudo types for the zone's mail and
-  URL forwards, which carry different fields. The record tools refuse them and say so.
-
-## Guardrails
-
-Every operation is classified by what it can cost you. Two gates apply, and both must pass.
-
-**1. Deployment gates** — what this deployment permits at all:
-
-| Variable                    | Default | Effect when unset                                                                                                   |
-| --------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------- |
-| `EURODNS_READ_ONLY`         | `false` | —                                                                                                                   |
-| `EURODNS_ALLOW_BILLING`     | `false` | The **11** operations that create a charge or extend a paid term are hidden.                                        |
-| `EURODNS_ALLOW_DESTRUCTIVE` | `false` | The **8** irreversible operations outside DNS (subscription deletions, SSL revocation and cancellation) are hidden. |
-
-**A disabled class is not advertised at all**, the same way `EURODNS_READ_ONLY=true` hides
-every state-changing tool. A surface that lists tools which can only ever answer "this is
-disabled" misdescribes the deployment. The default therefore advertises **63** of the 82
-tools; the startup line names which classes are hidden and the variable that would reveal
-each one.
-
-The switch is still what enforces: hiding decides what is advertised, and a tool reached by
-any other path meets the same refusal.
-
-DNS record deletion stays available by default: a zone can be restored from a snapshot,
-whereas a revoked certificate or a deleted subscription cannot.
-
-**3. Confirmation** — optional, and off by default:
-
-| Variable          | Values                      | Effect                                          |
-| ----------------- | --------------------------- | ----------------------------------------------- |
-| `EURODNS_CONFIRM` | `off`, `destructive`, `all` | Ask the caller to confirm before the call runs. |
-
-When set, a matching operation returns a confirmation request naming the operation and its
-target instead of running. The SDK serves both protocol revisions from it, so the handler is
-written once — but a **2025-era client on the HTTP transport cannot carry the exchange**,
-because a stateless instance has no session for it to travel over. Those calls are refused
-rather than run unconfirmed, and the refusal says so.
-
-Treat this as a guard against accidents, not as authorisation. The answer is asserted by the
-client, never proven to come from a person, which is why the deployment gates above still run
-first and still decide what is possible at all.
-
-**2. Scopes** — who, within that cap, may do it. Only in OAuth mode:
-
-| Scope                 | Grants                                                 |
-| --------------------- | ------------------------------------------------------ |
-| `eurodns.read`        | The 36 read operations                                 |
-| `eurodns.dns.write`   | DNS writes (zones, records, profiles)                  |
-| `eurodns.destructive` | Deletions outside DNS, SSL revocation and cancellation |
-| `eurodns.billing`     | The 11 operations that cost money                      |
-| `eurodns.audit`       | Reading the action history                             |
-
-Keeping both gates means enabling OAuth never silently widens what the server can do, and an
-operator can shut off a whole class without touching the identity provider.
-
-## Secrets
-
-### Keeping the key out of the client config file
-
-A client config such as `claude_desktop_config.json` stores the values in **clear text** in
-your user profile. To avoid it, point the client at a wrapper that reads the key from your OS
-keychain at launch:
-
-```bash
-#!/usr/bin/env bash
-# eurodns-mcp-wrapper — chmod +x, then use it as "command" in the client config.
-set -euo pipefail
-
-# macOS
-export EURODNS_APP_ID="$(security find-generic-password -s eurodns-app-id -w)"
-export EURODNS_API_KEY="$(security find-generic-password -s eurodns-api-key -w)"
-
-# Linux (libsecret):
-#   export EURODNS_API_KEY="$(secret-tool lookup service eurodns key api)"
-# Windows (PowerShell, with the SecretManagement module):
-#   $env:EURODNS_API_KEY = Get-Secret -Name eurodns-api-key -AsPlainText
-
-exec npx -y -p github:JigSawFr/eurodns-mcp eurodns-mcp
-```
-
-Store the secrets once with, for example,
-`security add-generic-password -s eurodns-api-key -a "$USER" -w`.
-
-### Reading secrets from 1Password Connect
-
-If you already run a [1Password Connect](https://developer.1password.com/docs/connect) server,
-any `EURODNS_*` variable may hold a secret reference instead of a value:
-
-```bash
-export OP_CONNECT_HOST="https://op-connect.internal:8080"
-export OP_CONNECT_TOKEN="…"
-
-export EURODNS_APP_ID="op://Infra/EuroDNS API/username"
-export EURODNS_API_KEY="op://Infra/EuroDNS API/credential"
-```
-
-Both `op://vault/item/field` and `op://vault/item/section/field` work, and a segment that is
-already a 1Password id is used as-is. This covers every secret the server reads, including
-`EURODNS_MCP_TOKEN` and the OAuth settings.
-
-This adds no dependency: the server calls the Connect REST API directly, and an environment
-with no references never contacts 1Password at all. If a reference cannot be resolved the
-server refuses to start, naming the reference and the step that failed — a server running
-without its credentials would serve nothing and hide the cause.
-
-References are resolved **once, at startup**. A value rotated in 1Password is picked up on
-the next restart.
-
-## HTTP transport
-
-```bash
-EURODNS_MCP_AUTH=token EURODNS_MCP_TOKEN="$(openssl rand -hex 32)" \
-  docker run --rm -p 3000:3000 \
-    -e EURODNS_APP_ID -e EURODNS_API_KEY \
-    -e EURODNS_MCP_AUTH -e EURODNS_MCP_TOKEN \
-    ghcr.io/jigsawfr/eurodns-mcp:latest
-```
-
-The endpoint is `POST /mcp`; `GET /healthz` reports readiness without authentication.
-Sessions are not used, so any number of instances can sit behind a load balancer.
-
-The server **refuses to start on a non-loopback address without authentication**. Set
-`EURODNS_ALLOWED_ORIGINS` when browser-based clients need to reach it — requests carrying
-an `Origin` header that is not listed are rejected, which is what stops a DNS-rebinding
-attack against a loopback deployment.
-
-### OAuth 2.1
-
-The server is an OAuth **resource server**. It does not issue tokens and embeds no identity
-provider: point it at any authorization server that publishes RFC 8414 or OpenID Connect
-discovery metadata.
-
-```bash
-EURODNS_MCP_AUTH=oauth \
-EURODNS_OAUTH_ISSUER=https://issuer.example.com \
-EURODNS_MCP_PUBLIC_URL=https://mcp.example.com/mcp \
-  docker run --rm -p 3000:3000 -e EURODNS_MCP_AUTH -e EURODNS_OAUTH_ISSUER \
-    -e EURODNS_MCP_PUBLIC_URL -e EURODNS_APP_ID -e EURODNS_API_KEY \
-    ghcr.io/jigsawfr/eurodns-mcp:latest
-```
-
-At the authorization server, register this server as an API whose identifier is exactly
-`EURODNS_MCP_PUBLIC_URL`, expose the scopes above, and let your MCP client request them.
-Names differ by product — an _API/Application ID URI_ in Microsoft Entra ID, an _audience_ in
-Auth0, a _client scope_ on a Keycloak client — but the shape is the same everywhere.
-
-A pre-registered `client_id` is fine, and is what the specification prefers: dynamic client
-registration (RFC 7591) is deprecated in favour of Client ID Metadata Documents, so an
-authorization server that does not implement RFC 7591 is not a problem.
-
-What the server does with a token:
-
-- Validates the signature against the discovered JWKS, plus `iss`, `exp` and `nbf`.
-- **Validates `aud` against its own identifier.** Without this, a token minted for any other
-  resource behind the same authorization server would be accepted here.
-- Never forwards the token upstream. The EuroDNS API is called with the server's own
-  credentials, as the specification requires.
-- Answers a missing scope with `403` and
-  `WWW-Authenticate: Bearer error="insufficient_scope", scope="…"`, so a client can request
-  consent for exactly what is missing rather than failing outright.
-
-## Audit log
-
-One JSON line per tool call, on stderr by default:
-
-```json
-{
-  "ts": "2026-01-01T10:00:00.000Z",
-  "correlationId": "…",
-  "actor": { "mode": "oauth", "subject": "alice@example.com" },
-  "tool": "eurodns_dns_upsert_record",
-  "risk": "write",
-  "target": "example.com",
-  "verdict": "allowed",
-  "upstreamStatus": 204,
-  "durationMs": 412
-}
-```
-
-The upstream API sees a single shared key for every caller, so this log is the only place an
-action can be traced to a person.
-
-- **Refusals are logged too**, with their reason — usually the most interesting line.
-- State-changing calls write a `started` line **before** the upstream request, so a crash
-  mid-write still leaves a trace of what was attempted.
-- Arguments are reduced to scalars and long strings become a length marker. Request bodies
-  and record values are never written: a TXT value is often a short-lived secret.
-
-Set `EURODNS_AUDIT_DESTINATION` to `stderr` (default), `stdout`, `file` (with
-`EURODNS_AUDIT_FILE`) or `none`. `stdout` is refused under stdio, where it carries the
-JSON-RPC stream.
-
-### Tamper-evidence
-
-Every line carries `seq`, its ordinal, and `prev`, the SHA-256 of the line before it. Editing
-or removing a line in the middle breaks the chain at the next one, and `eurodns_audit_query`
-says so — `chain.intact` false, `chain.brokenAt` naming the sequence number — in its result
-and in prose, so an agent summarising the history cannot present a tampered log as an
-ordinary answer.
-
-What it does not catch is the log being cut short at the end: a shorter valid chain is still
-valid. Shipping the lines to a collector as they are written is the answer to that, and the
-two measures complement each other rather than overlapping. On a stream the chain restarts at
-each process start, marked `prev: null`, since the process cannot see what a previous run
-wrote; with a file it resumes where it stopped. See
-[deploy/README.md](deploy/README.md#shipping-the-audit-log-to-a-siem).
-
-### Asking the server what happened
-
-With `EURODNS_AUDIT_QUERY` set, a `eurodns_audit_query` tool answers questions about past
-actions — which tool ran, on what, for whom, and whether it was allowed, refused or failed.
-Filter by time range, tool, target, verdict or risk class.
-
-| Value           | Effect                                |
-| --------------- | ------------------------------------- |
-| `off` (default) | No query tool.                        |
-| `own`           | A caller sees only their own actions. |
-| `all`           | A caller sees every action.           |
-
-Three things are deliberate here. It requires `EURODNS_AUDIT_DESTINATION=file` — stderr and
-stdout are write-only, so there would be nothing to read back. If the log also has to leave
-the host, `EURODNS_AUDIT_FORWARD_URL` posts each line to a collector **in addition to** the
-file, so shipping it costs neither this tool nor the file's hash chain; see
-[deploy/README.md](deploy/README.md#when-the-server-ships-the-lines-itself). It needs its own
-**`eurodns.audit`** scope rather than riding on `eurodns.read`, because reading who did what
-is not reading DNS data. And in `own` mode an explicit `actor` filter is refused rather than
-quietly ignored, so nobody mistakes a filtered result for the whole picture.
-
-Queries read a bounded window from the end of the log. When older entries lie beyond it the
-result says so, so you narrow the time range instead of concluding you have seen everything.
-
-## Configuration reference
-
-<details>
-<summary>All environment variables</summary>
-
-| Variable                       | Default                        | Purpose                                                  |
-| ------------------------------ | ------------------------------ | -------------------------------------------------------- |
-| `EURODNS_APP_ID`               | —                              | **Required.** Application ID.                            |
-| `EURODNS_API_KEY`              | —                              | **Required.** API key.                                   |
-| `EURODNS_BASE_URL`             | `https://rest-api.eurodns.com` | API base URL.                                            |
-| `EURODNS_TIMEOUT_MS`           | `30000`                        | Upstream request timeout.                                |
-| `EURODNS_MAX_RETRIES`          | `2`                            | Retries, for 429 and 5xx only.                           |
-| `EURODNS_CHARACTER_LIMIT`      | `25000`                        | Response size before truncation.                         |
-| `EURODNS_READ_ONLY`            | `false`                        | Advertise read tools only.                               |
-| `EURODNS_ALLOW_BILLING`        | `false`                        | Permit operations that cost money.                       |
-| `EURODNS_ALLOW_DESTRUCTIVE`    | `false`                        | Permit irreversible non-DNS operations.                  |
-| `EURODNS_CONFIRM`              | `off`                          | `off`, `destructive` or `all`. Ask before running.       |
-| `EURODNS_AUDIT_DESTINATION`    | `stderr`                       | `stderr`, `stdout`, `file`, `none`.                      |
-| `EURODNS_AUDIT_FILE`           | —                              | Required when the destination is `file`.                 |
-| `EURODNS_AUDIT_QUERY`          | `off`                          | `off`, `own` or `all`. Requires the `file` destination.  |
-| `EURODNS_AUDIT_MAX_BYTES`      | `67108864`                     | Size at which the log rotates to `<file>.1`.             |
-| `OP_CONNECT_HOST`              | —                              | 1Password Connect server, when using `op://` references. |
-| `OP_CONNECT_TOKEN`             | —                              | Connect token for that server.                           |
-| `HOST`                         | `127.0.0.1`                    | HTTP bind address.                                       |
-| `PORT`                         | `3000`                         | HTTP port.                                               |
-| `EURODNS_MCP_AUTH`             | `none`                         | `oauth`, `token` or `none`.                              |
-| `EURODNS_MCP_TOKEN`            | —                              | Shared secret, at least 32 characters.                   |
-| `EURODNS_MCP_TOKEN_LABEL`      | `static-token`                 | Name recorded in the audit log for that token.           |
-| `EURODNS_MCP_PUBLIC_URL`       | —                              | Canonical public URL; also the default OAuth audience.   |
-| `EURODNS_ALLOWED_ORIGINS`      | —                              | Comma-separated origins allowed to call the server.      |
-| `EURODNS_MAX_BODY_BYTES`       | `1048576`                      | Largest JSON body accepted, checked before auth.         |
-| `EURODNS_METRICS_TOKEN`        | —                              | Enables `GET /metrics` and is the bearer it requires.    |
-| `EURODNS_RATE_LIMIT`           | `300`                          | Requests per window on `/mcp`. `0` disables it.          |
-| `EURODNS_RATE_LIMIT_WINDOW_MS` | `60000`                        | The window, in milliseconds.                             |
-| `EURODNS_TRUST_PROXY`          | `0`                            | Proxy hops to trust for the client address.              |
-| `EURODNS_OAUTH_ISSUER`         | —                              | Authorization server issuer.                             |
-| `EURODNS_OAUTH_AUDIENCE`       | `EURODNS_MCP_PUBLIC_URL`       | Expected `aud` claim.                                    |
-| `EURODNS_OAUTH_JWKS_URI`       | discovered                     | Overrides JWKS discovery.                                |
-| `EURODNS_OAUTH_SUBJECT_CLAIM`  | `sub`                          | Claim recorded as the actor.                             |
-| `EURODNS_OAUTH_SCOPE_CLAIM`    | `scope`, `scp`, `roles`        | Claim carrying scopes.                                   |
-| `EURODNS_OAUTH_ALGORITHMS`     | asymmetric set                 | Signature algorithms accepted. Never includes `HS*`.     |
-
-</details>
+## Documentation
+
+| Page                                     | What it covers                                                          |
+| ---------------------------------------- | ----------------------------------------------------------------------- |
+| [Tools](docs/tools.md)                   | All 82 tools, how they are named, and the three DNS workflow tools      |
+| [Guardrails](docs/guardrails.md)         | Risk classes, what a deployment can forbid, confirmation before a call  |
+| [Configuration](docs/configuration.md)   | Every environment variable, with its default                            |
+| [HTTP transport](docs/http-transport.md) | Serving several clients, static tokens, OAuth 2.1 and scopes            |
+| [Secrets](docs/secrets.md)               | Keeping the API key out of a client config, and 1Password Connect       |
+| [Audit log](docs/audit-log.md)           | What is recorded, the hash chain, asking the server what happened       |
+| [Deploying](deploy/README.md)            | Containers, Fly.io, Render, Railway, and shipping the log to a SIEM     |
+| [Protocol](docs/protocol.md)             | Which MCP revisions are spoken, and how both are served at one endpoint |
+| [Development](docs/development.md)       | Building, testing, the generated tool surface, and how releases work    |
 
 ## Deployment
 
@@ -500,44 +182,15 @@ One setting catches everyone once: inside a container the server listens on `0.0
 it **refuses to start on a non-loopback address without authentication**. Set
 `EURODNS_MCP_AUTH` to `token` or `oauth`.
 
-## Development
+## Contributing
 
-```bash
-npm install
-npm run gen      # regenerate src/generated from spec/openapi.json
-npm run build
-npm test
-npx @modelcontextprotocol/inspector node dist/index.js
-```
-
-The tool surface is generated from `spec/openapi.json`; CI regenerates it and fails if the
-committed output has drifted. Edit the generator or the curated names and descriptions in
-`src/tools/`, never `src/generated/`.
-
-Tests run against a real MCP client over an in-memory transport, with the HTTP layer driven
-through the real Express app. No test touches the network.
-
-[CONTRIBUTING.md](CONTRIBUTING.md) covers the conventions that are load bearing rather than
-decorative — what CI enforces and why, and the one rule that will bite you first. Everyone
-taking part is expected to follow the [code of conduct](CODE_OF_CONDUCT.md).
-
-### Releasing
-
-Releases are cut by [release-please](https://github.com/googleapis/release-please) from
-[Conventional Commit](https://www.conventionalcommits.org) subjects. It keeps a release pull
-request open, accumulating `CHANGELOG.md`; merging it tags the version, publishes a GitHub
-Release, and that Release triggers the image build.
-
-Only the **subject line** follows the convention — commit bodies stay prose. `feat:` bumps
-the minor, `fix:` the patch, and a `!` or `BREAKING CHANGE:` bumps the minor too while the
-project is pre-1.0.
-
-Squash merges are the most predictable setup, since the pull request title then becomes the
-commit subject — which is why CI checks that title. The failure mode this guards against is
-quiet: a non-conforming subject contributes nothing and no release appears.
-
-The version stays in `0.x` until the server has been exercised against the real EuroDNS API.
+[CONTRIBUTING.md](CONTRIBUTING.md) has the workflow, and
+[docs/development.md](docs/development.md) the commands. Pull request titles are checked
+against [Conventional Commits](https://www.conventionalcommits.org), because that is what the
+changelog is generated from.
 
 ## License
 
 [MIT](LICENSE).
+
+The EuroDNS name and logo are trademarks of EuroDNS S.A. and are not covered by that licence.
