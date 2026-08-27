@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.1](https://github.com/JigSawFr/eurodns-mcp/compare/v0.2.0...v0.2.1) (2026-08-27)
+
+
+### Bug fixes
+
+* **ci:** publish the image by calling the workflow, not by listening for a release ([#26](https://github.com/JigSawFr/eurodns-mcp/issues/26)) ([d7bd0e8](https://github.com/JigSawFr/eurodns-mcp/commit/d7bd0e8ae1d85f308dcbcaedeb1f8224d0d4f39d))
+* **ci:** skip the provenance attestation while the repository is private ([#28](https://github.com/JigSawFr/eurodns-mcp/issues/28)) ([9e9dc99](https://github.com/JigSawFr/eurodns-mcp/commit/9e9dc99cde229f09b89fe75b214714ebd7c0a79a))
+
 ## [0.2.0](https://github.com/JigSawFr/eurodns-mcp/compare/v0.1.0...v0.2.0) (2026-08-26)
 
 
