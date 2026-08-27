@@ -199,6 +199,79 @@ describe('eurodns_audit_query tool', () => {
     await close();
   });
 
+  it('passes every filter through to the reader, not just the ones with a shortcut', async () => {
+    // Each filter is spread conditionally into the reader's options. A test that passes
+    // none of them leaves every one of those branches on its default side, which is how
+    // they were all uncovered at once.
+    const path = logFile([
+      entry({ ts: '2026-01-01T00:00:00.000Z', tool: 'eurodns_tld_list', risk: 'read' }),
+      entry({
+        ts: '2026-01-02T00:00:00.000Z',
+        tool: 'eurodns_dns_save_zone',
+        risk: 'write',
+        target: 'example.com',
+        verdict: 'denied',
+      }),
+    ]);
+    const { client, close } = await connect({ config: withLog(path, 'all') });
+
+    const result = await client.callTool({
+      name: 'eurodns_audit_query',
+      arguments: {
+        since: '2026-01-01T12:00:00.000Z',
+        until: '2026-01-03T00:00:00.000Z',
+        tool: 'eurodns_dns_save_zone',
+        target: 'example.com',
+        verdict: 'denied',
+        risk: 'write',
+        includeStarted: false,
+      },
+    });
+
+    const structured = (
+      result as unknown as { structuredContent: { entries: { tool: string; verdict: string }[] } }
+    ).structuredContent;
+
+    expect(structured.entries).toHaveLength(1);
+    expect(structured.entries[0]?.tool).toBe('eurodns_dns_save_zone');
+    expect(structured.entries[0]?.verdict).toBe('denied');
+    await close();
+  });
+
+  it('says the window was truncated rather than presenting a partial answer as whole', async () => {
+    const many = Array.from({ length: 400 }, (_, i) =>
+      entry({
+        ts: `2026-01-01T00:${String(i % 60).padStart(2, '0')}:00.000Z`,
+        correlationId: `c${i}`,
+      }),
+    );
+    const path = logFile(many);
+    const { client, close } = await connect({ config: withLog(path, 'all') });
+
+    const result = await client.callTool({
+      name: 'eurodns_audit_query',
+      arguments: { limit: 5 },
+    });
+
+    expect(textOf(result)).toMatch(/truncat/i);
+    await close();
+  });
+
+  it('reports a broken hash chain, and where it broke', async () => {
+    // A log whose chain does not verify is the case the chain exists for. Saying nothing
+    // would make a tampered log look exactly like an intact one.
+    const path = logFile([
+      { ...entry({ correlationId: 'a' }), seq: 1, prev: null },
+      { ...entry({ correlationId: 'b' }), seq: 2, prev: 'not-the-previous-hash' },
+    ]);
+    const { client, close } = await connect({ config: withLog(path, 'all') });
+
+    const result = await client.callTool({ name: 'eurodns_audit_query', arguments: {} });
+
+    expect(textOf(result)).toMatch(/chain|sequence/i);
+    await close();
+  });
+
   it('records its own use, because reading the history is an action', async () => {
     const path = logFile([entry()]);
     const { fetchImpl } = stubFetch(() => ({ body: {} }));

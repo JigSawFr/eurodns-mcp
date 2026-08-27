@@ -10,15 +10,19 @@ export default defineConfig({
       include: ['src/**/*.ts'],
       exclude: ['src/generated/**'],
       reporter: ['text-summary', 'lcov'],
-      // Measured, then floored a few points below — 87.9 / 76.2 / 91.4 / 88.8 at the time
-      // of writing. A threshold set at the current number turns every unrelated refactor
-      // red; one invented out of ambition fails without protecting anything. These catch a
-      // real drop and tolerate ordinary movement.
+      // Set at the measurement, not below it. This is a deliberate choice with a known
+      // cost: nothing can slip, and an unrelated refactor that happens to remove a covered
+      // line turns the build red even though nothing got worse.
+      //
+      // When that happens, there are exactly two honest moves. Cover what the refactor
+      // left bare, or lower the number here in the same commit that made it true, saying
+      // why. What is not a move is deleting a test to make the ratio work, or nudging the
+      // floor down as a reflex — at that point the number stops meaning anything.
       thresholds: {
-        statements: 85,
-        branches: 73,
-        functions: 88,
-        lines: 85,
+        statements: 90.77,
+        branches: 84.32,
+        functions: 91.13,
+        lines: 91.79,
       },
     },
   },

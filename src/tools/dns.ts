@@ -168,6 +168,9 @@ function registerUpsertRecord(server: McpServer, context: ToolContext): void {
         params: { type: args.type, host: args.host, ttl: args.ttl },
       });
 
+      // Kept although the HTTP scope gate already refuses this before dispatch: it is the
+      // backstop for a tool that is missing from toolScopeIndex, where the middleware has
+      // nothing to check and would wave the call straight through. Two gates, deliberately.
       if (!decision.allowed) {
         span.complete({ verdict: 'denied', reason: decision.reason });
         return textResult(decision.reason, true);
@@ -299,6 +302,9 @@ function registerDeleteRecord(server: McpServer, context: ToolContext): void {
         params: { type: args.type, host: args.host },
       });
 
+      // Kept although the HTTP scope gate already refuses this before dispatch: it is the
+      // backstop for a tool that is missing from toolScopeIndex, where the middleware has
+      // nothing to check and would wave the call straight through. Two gates, deliberately.
       if (!decision.allowed) {
         span.complete({ verdict: 'denied', reason: decision.reason });
         return textResult(decision.reason, true);
@@ -417,6 +423,9 @@ function registerDiffZone(server: McpServer, context: ToolContext): void {
         params: { records: args.records.length },
       });
 
+      // Kept although the HTTP scope gate already refuses this before dispatch: it is the
+      // backstop for a tool that is missing from toolScopeIndex, where the middleware has
+      // nothing to check and would wave the call straight through. Two gates, deliberately.
       if (!decision.allowed) {
         span.complete({ verdict: 'denied', reason: decision.reason });
         return textResult(decision.reason, true);

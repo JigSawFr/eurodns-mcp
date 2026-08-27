@@ -88,6 +88,29 @@ export function hiddenClasses(config: Config): string[] {
   return hidden;
 }
 
+/**
+ * The line each entry point writes to stderr when it comes up.
+ *
+ * Built here rather than in the two entry points because it is the operator's only summary
+ * of what this process will and will not do — and because inside `main()` it was
+ * unreachable from a test, so the hidden-class list it carries had nothing checking it.
+ */
+export function startupLine(options: {
+  config: Config;
+  toolCount: number;
+  /** Absent on stdio, where there is nothing to listen on. */
+  endpoint?: { url: string; authMode: string };
+}): string {
+  const hidden = hiddenClasses(options.config);
+  const where = options.endpoint
+    ? `listening on ${options.endpoint.url} (auth: ${options.endpoint.authMode}, ` +
+      `${options.toolCount} tools${hidden.length ? `, hidden: ${hidden.join(', ')}` : ''})`
+    : `ready on stdio with ${options.toolCount} tools` +
+      `${hidden.length ? ` (hidden: ${hidden.join(', ')})` : ''}`;
+
+  return `${SERVER_NAME} ${SERVER_VERSION} ${where}`;
+}
+
 export interface BuiltServer {
   server: McpServer;
   context: ToolContext;

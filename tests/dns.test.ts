@@ -229,6 +229,74 @@ describe('eurodns_dns_delete_record', () => {
     expect(textOf(result)).toContain('No MX record');
     await close();
   });
+
+  it('refuses to remove a record the provider locked', async () => {
+    const { fetchImpl, requests } = stubFetch(zoneRoutes());
+    const { client, close } = await connect({ fetchImpl });
+
+    // The upsert tool has had this guard covered since it was written; the delete tool's
+    // had none, which is how it could have been removed without a test noticing.
+    const result = await client.callTool({
+      name: 'eurodns_dns_delete_record',
+      arguments: { domainName: 'example.com', type: 'NS', host: '@' },
+    });
+
+    expect(isError(result)).toBe(true);
+    expect(textOf(result)).toContain('locked');
+    expect(requests.some((r) => r.method === 'DELETE')).toBe(false);
+    await close();
+  });
+
+  it('refuses the MAIL and URL pseudo types rather than deleting something else', async () => {
+    const { fetchImpl, requests } = stubFetch(zoneRoutes());
+    const { client, close } = await connect({ fetchImpl });
+
+    for (const type of ['MAIL', 'URL']) {
+      const result = await client.callTool({
+        name: 'eurodns_dns_delete_record',
+        arguments: { domainName: 'example.com', type, host: '@' },
+      });
+      expect(isError(result)).toBe(true);
+    }
+
+    expect(requests.some((r) => r.method === 'DELETE')).toBe(false);
+    await close();
+  });
+
+  it('says why when the matching record carries no id to delete by', async () => {
+    // A record the API returned without an id cannot be addressed individually. Saving the
+    // whole zone is the way out, and the message has to say so rather than fail opaquely.
+    const { fetchImpl, requests } = stubFetch(() => ({
+      body: { name: 'example.com', records: [{ type: 'A', host: 'www', rdata: '203.0.113.9' }] },
+    }));
+    const { client, close } = await connect({ fetchImpl });
+
+    const result = await client.callTool({
+      name: 'eurodns_dns_delete_record',
+      arguments: { domainName: 'example.com', type: 'A', host: 'www' },
+    });
+
+    expect(isError(result)).toBe(true);
+    expect(textOf(result)).toContain('no id');
+    expect(requests.some((r) => r.method === 'DELETE')).toBe(false);
+    await close();
+  });
+
+  it('reports the upstream status when the delete itself fails', async () => {
+    const { fetchImpl } = stubFetch((request) => {
+      if (request.method === 'GET') return { body: ZONE };
+      return { status: 409, body: { message: 'record in use' } };
+    });
+    const { client, close } = await connect({ fetchImpl });
+
+    const result = await client.callTool({
+      name: 'eurodns_dns_delete_record',
+      arguments: { domainName: 'example.com', type: 'A', host: '@' },
+    });
+
+    expect(isError(result)).toBe(true);
+    await close();
+  });
 });
 
 describe('eurodns_dns_diff_zone', () => {
@@ -258,6 +326,74 @@ describe('eurodns_dns_diff_zone', () => {
     expect(structured.updated).toHaveLength(1);
     expect(requests.every((r) => r.method === 'GET')).toBe(true);
     await close();
+  });
+
+  it('separates a TTL-only change from a value change', async () => {
+    const { fetchImpl } = stubFetch(zoneRoutes());
+    const { client, close } = await connect({ fetchImpl });
+
+    const result = await client.callTool({
+      name: 'eurodns_dns_diff_zone',
+      arguments: {
+        domainName: 'example.com',
+        records: [
+          // Same rdata, different TTL — an update of the TTL alone.
+          { type: 'A', host: '@', rdata: '203.0.113.10', ttl: 7200 },
+          // Same type and host, different rdata — a replacement.
+          { type: 'NS', host: '@', rdata: 'ns2.example.net' },
+        ],
+      },
+    });
+
+    const { updated } = (
+      result as unknown as {
+        structuredContent: { updated: { ttl?: unknown; rdata?: unknown }[] };
+      }
+    ).structuredContent;
+
+    expect(updated).toHaveLength(2);
+    // The two shapes differ, and that difference is the point: a TTL-only change reports
+    // rdata as the unchanged value and ttl as a transition, while a replacement reports
+    // rdata as the transition. A reader of the diff can tell them apart without guessing.
+    expect(updated[0]?.ttl).toEqual({ from: 3600, to: 7200 });
+    expect(updated[0]?.rdata).toBe('203.0.113.10');
+    expect(updated[1]?.rdata).toEqual({ from: 'ns1.example.net', to: 'ns2.example.net' });
+    await close();
+  });
+
+  it('reads a zone whose records omit ttl and rdata, and one with no records at all', async () => {
+    // The API does not always populate every field. Optional-chaining fallbacks are easy to
+    // write and easy to get wrong, and nothing exercised them until now.
+    const sparse = stubFetch(() => ({
+      body: { name: 'example.com', records: [{ id: 7, type: 'A', host: 'www' }] },
+    }));
+    const first = await connect({ fetchImpl: sparse.fetchImpl });
+    const result = await first.client.callTool({
+      name: 'eurodns_dns_diff_zone',
+      arguments: {
+        domainName: 'example.com',
+        records: [{ type: 'A', host: 'www', rdata: '203.0.113.30', ttl: 3600 }],
+      },
+    });
+    const changed = (result as unknown as { structuredContent: { updated: { rdata?: unknown }[] } })
+      .structuredContent;
+    expect(changed.updated[0]?.rdata).toEqual({ from: null, to: '203.0.113.30' });
+    await first.close();
+
+    const empty = stubFetch(() => ({ body: { name: 'example.com' } }));
+    const second = await connect({ fetchImpl: empty.fetchImpl });
+    const onEmpty = await second.client.callTool({
+      name: 'eurodns_dns_diff_zone',
+      arguments: {
+        domainName: 'example.com',
+        records: [{ type: 'A', host: 'www', rdata: '203.0.113.30' }],
+      },
+    });
+    const structured = (result as unknown as { structuredContent: { added: unknown[] } })
+      .structuredContent;
+    expect(isError(onEmpty)).toBeFalsy();
+    expect(structured).toBeDefined();
+    await second.close();
   });
 
   it('stays available in read-only mode', async () => {
