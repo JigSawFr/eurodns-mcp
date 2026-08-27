@@ -260,6 +260,14 @@ jobs:
 
           body=$(curl -fsS localhost:3000/metrics -H "Authorization: Bearer $METRICS_TOKEN")
           echo "$body" | grep -E 'eurodns_mcp_tool_calls_total|eurodns_mcp_tools_registered'
+
+          # The version is read from package.json at runtime, and the container is where that
+          # path is most likely to break: it is the only layout where the build and the
+          # manifest are copied in separately. This metric reported 0.1.0 for two releases.
+          want=$(node -p "require('./package.json').version")
+          echo "$body" | grep -q "eurodns_mcp_build_info{version=\"$want\"} 1" \
+            || { echo "::error::build_info does not report $want"; echo "$body" | grep build_info; exit 1; }
+          echo "build_info reports $want"
           if echo "$body" | grep -qi 'test-api-key\|static-token'; then
             echo "::error::/metrics must not carry a credential or an actor"; exit 1
           fi
