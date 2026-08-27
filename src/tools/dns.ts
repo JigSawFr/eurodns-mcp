@@ -16,6 +16,7 @@ import {
 } from '../schemas/dns.js';
 import { identityFrom } from './registry.js';
 import type { ToolContext } from './context.js';
+import type { AuditSpan } from '../audit.js';
 import type { RiskClass } from '../constants.js';
 
 /**
@@ -43,6 +44,24 @@ function failureMessage(error: unknown, fallback: string): string {
   return error instanceof EuroDnsApiError || error instanceof EuroDnsTransportError
     ? error.message
     : fallback;
+}
+
+/**
+ * Records an upstream failure, and turns it into the caller's answer.
+ *
+ * The three DNS tools each had these eight lines, identical but for the fallback message.
+ * The status is lifted out of the error where there is one: a `failed` audit line that
+ * cannot say whether the API answered 403 or the request timed out is much less use when
+ * the log is read back, and that is the whole point of keeping it.
+ */
+function upstreamFailure(span: AuditSpan, error: unknown, fallback: string) {
+  const status = error instanceof EuroDnsApiError ? error.status : undefined;
+  span.complete({
+    verdict: 'failed',
+    ...(status === undefined ? {} : { upstreamStatus: status }),
+    reason: 'upstream error',
+  });
+  return textResult(failureMessage(error, fallback), true);
 }
 
 /** Shared preamble: audit span plus guardrail check. */
@@ -246,16 +265,7 @@ function registerUpsertRecord(server: McpServer, context: ToolContext): void {
           },
         });
       } catch (error) {
-        const status = error instanceof EuroDnsApiError ? error.status : undefined;
-        span.complete({
-          verdict: 'failed',
-          ...(status === undefined ? {} : { upstreamStatus: status }),
-          reason: 'upstream error',
-        });
-        return textResult(
-          failureMessage(error, `Could not upsert the record in ${args.domainName}.`),
-          true,
-        );
+        return upstreamFailure(span, error, `Could not upsert the record in ${args.domainName}.`);
       }
     },
   );
@@ -373,16 +383,7 @@ function registerDeleteRecord(server: McpServer, context: ToolContext): void {
           zone: args.domainName,
         });
       } catch (error) {
-        const status = error instanceof EuroDnsApiError ? error.status : undefined;
-        span.complete({
-          verdict: 'failed',
-          ...(status === undefined ? {} : { upstreamStatus: status }),
-          reason: 'upstream error',
-        });
-        return textResult(
-          failureMessage(error, `Could not delete the record in ${args.domainName}.`),
-          true,
-        );
+        return upstreamFailure(span, error, `Could not delete the record in ${args.domainName}.`);
       }
     },
   );
@@ -485,16 +486,7 @@ function registerDiffZone(server: McpServer, context: ToolContext): void {
         span.complete({ verdict: 'allowed', upstreamStatus: 200 });
         return jsonResult(context, { zone: args.domainName, added, updated, unchanged });
       } catch (error) {
-        const status = error instanceof EuroDnsApiError ? error.status : undefined;
-        span.complete({
-          verdict: 'failed',
-          ...(status === undefined ? {} : { upstreamStatus: status }),
-          reason: 'upstream error',
-        });
-        return textResult(
-          failureMessage(error, `Could not read the zone ${args.domainName}.`),
-          true,
-        );
+        return upstreamFailure(span, error, `Could not read the zone ${args.domainName}.`);
       }
     },
   );
