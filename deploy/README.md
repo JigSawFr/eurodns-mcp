@@ -62,9 +62,12 @@ that history has to be kept, ship the lines to a collector as well.
 ## Fly.io
 
 ```bash
-cp deploy/fly.toml fly.toml     # Fly builds from the working directory; see the file header
-fly launch --no-deploy
-fly volumes create eurodns_audit --size 1 --region cdg
+fly launch --no-deploy -c deploy/fly.toml   # or move the file to the root and drop -c
+
+# The volume is optional: `initial_size` in the config creates it on the first deploy, under
+# the name `data`. Create it by hand only to choose a different size — `fly volumes create`
+# ignores `initial_size`, so an existing volume always wins.
+fly volumes create data --size 1
 
 # The whole point: a dedicated outbound IP to allowlist at EuroDNS.
 fly ips allocate-v4 --shared=false
