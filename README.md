@@ -4,16 +4,8 @@
 
 **Manage your domains, DNS zones and subscriptions by asking for it.**
 
-<p>
-  <sub>A <a href="https://modelcontextprotocol.io">Model Context Protocol</a> server for the</sub>
-  <br />
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/eurodns-logo-white.svg" />
-    <img src="docs/assets/eurodns-logo.svg" alt="EuroDNS" height="24" />
-  </picture>
-  <br />
-  <sub>User API — domains, DNS zones, contacts, subscriptions, SSL, invoices and orders.</sub>
-</p>
+A [Model Context Protocol](https://modelcontextprotocol.io) server for the EuroDNS User API —
+domains, DNS zones, contacts, subscriptions, SSL, invoices and orders.
 
 [![CI](https://github.com/JigSawFr/eurodns-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/JigSawFr/eurodns-mcp/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -26,8 +18,7 @@
 </div>
 
 > This is an independent open-source project. It is **not affiliated with, endorsed by, or
-> supported by EuroDNS**. The EuroDNS name and logo are trademarks of EuroDNS S.A., shown
-> here only to identify the API this server talks to.
+> supported by EuroDNS**. "EuroDNS" is used only to identify the API this server talks to.
 
 > Written by a professional engineer with AI assistance. Every line was reviewed before it
 > was committed, and the responsibility for what it does is human.
@@ -151,6 +142,7 @@ ways around it.
 | [HTTP transport](docs/http-transport.md) | Serving several clients, static tokens, OAuth 2.1 and scopes            |
 | [Secrets](docs/secrets.md)               | Keeping the API key out of a client config, and 1Password Connect       |
 | [Audit log](docs/audit-log.md)           | What is recorded, the hash chain, asking the server what happened       |
+| [Entra ID](docs/entra-id.md)             | Step-by-step OAuth with Microsoft Entra ID, and its pitfalls            |
 | [Deploying](deploy/README.md)            | Containers, Fly.io, Render, Railway, and shipping the log to a SIEM     |
 | [Protocol](docs/protocol.md)             | Which MCP revisions are spoken, and how both are served at one endpoint |
 | [Development](docs/development.md)       | Building, testing, the generated tool surface, and how releases work    |
@@ -193,4 +185,4 @@ changelog is generated from.
 
 [MIT](LICENSE).
 
-The EuroDNS name and logo are trademarks of EuroDNS S.A. and are not covered by that licence.
+"EuroDNS" is a trademark of EuroDNS S.A. and is not covered by that licence.

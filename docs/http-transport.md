@@ -18,6 +18,8 @@ attack against a loopback deployment.
 
 ### OAuth 2.1
 
+For a worked setup with a real authorization server, including the traps that only
+show up in practice, see the [Microsoft Entra ID guide](entra-id.md).
 The server is an OAuth **resource server**. It does not issue tokens and embeds no identity
 provider: point it at any authorization server that publishes RFC 8414 or OpenID Connect
 discovery metadata.
@@ -53,4 +55,4 @@ What the server does with a token:
 
 ---
 
-[← Documentation](README.md) · [Tools](tools.md) · [Guardrails](guardrails.md) · [HTTP transport](http-transport.md) · [Audit log](audit-log.md) · [Secrets](secrets.md) · [Configuration](configuration.md) · [Protocol](protocol.md) · [Development](development.md)
+[← Documentation](README.md) · [Tools](tools.md) · [Guardrails](guardrails.md) · [HTTP transport](http-transport.md) · [Audit log](audit-log.md) · [Secrets](secrets.md) · [Configuration](configuration.md) · [Protocol](protocol.md) · [Entra ID](entra-id.md) · [Development](development.md)
