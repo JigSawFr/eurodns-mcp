@@ -25,6 +25,17 @@ async function main(): Promise<void> {
   // serves both. Nothing here has to know which era the client speaks.
   serveStdio(() => buildServer({ config, transport: 'stdio', audit }).server);
 
+  // The parent decides when this process ends, and on stdio that is usually a signal. If a
+  // collector is configured, whatever it has not received yet would be lost without this.
+  let shuttingDown = false;
+  const shutdown = (): void => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    void audit.close().then(() => process.exit(0));
+  };
+  process.on('SIGTERM', shutdown);
+  process.on('SIGINT', shutdown);
+
   const hidden = hiddenClasses(config);
   process.stderr.write(
     `${SERVER_NAME} ${SERVER_VERSION} ready on stdio with ${toolCount} tools` +

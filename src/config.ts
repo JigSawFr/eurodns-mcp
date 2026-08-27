@@ -1,5 +1,10 @@
 import { z } from 'zod';
 import {
+  DEFAULT_AUDIT_FORWARD_BACKOFF_MS,
+  DEFAULT_AUDIT_FORWARD_BATCH,
+  DEFAULT_AUDIT_FORWARD_INTERVAL_MS,
+  DEFAULT_AUDIT_FORWARD_QUEUE,
+  DEFAULT_AUDIT_FORWARD_RETRIES,
   DEFAULT_AUDIT_MAX_BYTES,
   DEFAULT_RATE_LIMIT,
   DEFAULT_RATE_LIMIT_WINDOW_MS,
@@ -68,6 +73,28 @@ export interface AuditConfig {
   query: AuditQueryMode;
   /** Size at which a file destination rotates. Ignored by the other destinations. */
   maxBytes: number;
+  /** Set when lines are also shipped to a collector. Independent of `destination`. */
+  forward?: AuditForwardConfig;
+}
+
+/**
+ * Where audit lines are shipped, alongside whatever `destination` records locally.
+ *
+ * Deliberately additive: `EURODNS_AUDIT_QUERY` needs the `file` destination, so making
+ * this a destination of its own would force a choice between shipping the log and being
+ * able to ask about it.
+ */
+export interface AuditForwardConfig {
+  url: string;
+  token?: string;
+  /** Lines per request, and the threshold that sends one early. */
+  batch: number;
+  /** How long a partial batch waits before it is sent anyway. */
+  intervalMs: number;
+  /** Lines held while the collector is unreachable, before the oldest are dropped. */
+  queue: number;
+  maxRetries: number;
+  backoffMs: number;
 }
 
 export type AuthMode = 'oauth' | 'token' | 'none';
@@ -244,6 +271,8 @@ function loadAuditConfig(env: NodeJS.ProcessEnv, transport: 'stdio' | 'http'): A
     'EURODNS_AUDIT_MAX_BYTES',
   );
 
+  const forward = loadAuditForwardConfig(env);
+
   if (destination === 'file') {
     const filePath = (env.EURODNS_AUDIT_FILE || '').trim();
     if (filePath === '') {
@@ -251,10 +280,72 @@ function loadAuditConfig(env: NodeJS.ProcessEnv, transport: 'stdio' | 'http'): A
         'EURODNS_AUDIT_DESTINATION=file requires EURODNS_AUDIT_FILE to name the target file.',
       );
     }
-    return { destination, filePath, query, maxBytes };
+    return { destination, filePath, query, maxBytes, ...(forward ? { forward } : {}) };
   }
 
-  return { destination, query, maxBytes };
+  return { destination, query, maxBytes, ...(forward ? { forward } : {}) };
+}
+
+/**
+ * Reads the collector settings, or returns undefined when none are set.
+ *
+ * Applies to every destination and both transports: shipping lines off the host is
+ * orthogonal to what is recorded locally, and `none` plus a collector is a legitimate
+ * choice on a host with no writable disk.
+ */
+function loadAuditForwardConfig(env: NodeJS.ProcessEnv): AuditForwardConfig | undefined {
+  const raw = (env.EURODNS_AUDIT_FORWARD_URL || '').trim();
+  const token = (env.EURODNS_AUDIT_FORWARD_TOKEN || '').trim();
+
+  if (raw === '') {
+    // A token with nowhere to send it is a half-finished configuration, and silence would
+    // let a deployment believe its audit log is being shipped when nothing is.
+    if (token !== '') {
+      throw new ConfigError(
+        'EURODNS_AUDIT_FORWARD_TOKEN is set but EURODNS_AUDIT_FORWARD_URL is not, so nothing ' +
+          'is being shipped. Set the URL, or unset the token.',
+      );
+    }
+    return undefined;
+  }
+
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new ConfigError(`EURODNS_AUDIT_FORWARD_URL is not a valid URL: ${raw}`);
+  }
+
+  const loopback = ['localhost', '127.0.0.1', '[::1]', '::1'].includes(url.hostname);
+  if (url.protocol !== 'https:' && !(url.protocol === 'http:' && loopback)) {
+    throw new ConfigError(
+      'EURODNS_AUDIT_FORWARD_URL must use https. The audit log names who changed what, and ' +
+        'sending it in the clear defeats the point of keeping it. Plain http is accepted ' +
+        'only for a loopback address, where a sidecar collector is the usual arrangement.',
+    );
+  }
+
+  return {
+    url: url.toString(),
+    ...(token === '' ? {} : { token }),
+    batch: parseOrThrow(
+      intFromEnv(DEFAULT_AUDIT_FORWARD_BATCH),
+      env.EURODNS_AUDIT_FORWARD_BATCH,
+      'EURODNS_AUDIT_FORWARD_BATCH',
+    ),
+    intervalMs: parseOrThrow(
+      intFromEnv(DEFAULT_AUDIT_FORWARD_INTERVAL_MS),
+      env.EURODNS_AUDIT_FORWARD_INTERVAL_MS,
+      'EURODNS_AUDIT_FORWARD_INTERVAL_MS',
+    ),
+    queue: parseOrThrow(
+      intFromEnv(DEFAULT_AUDIT_FORWARD_QUEUE),
+      env.EURODNS_AUDIT_FORWARD_QUEUE,
+      'EURODNS_AUDIT_FORWARD_QUEUE',
+    ),
+    maxRetries: DEFAULT_AUDIT_FORWARD_RETRIES,
+    backoffMs: DEFAULT_AUDIT_FORWARD_BACKOFF_MS,
+  };
 }
 
 function loadHttpConfig(env: NodeJS.ProcessEnv, transport: 'stdio' | 'http'): HttpConfig {

@@ -410,7 +410,10 @@ Filter by time range, tool, target, verdict or risk class.
 | `all`           | A caller sees every action.           |
 
 Three things are deliberate here. It requires `EURODNS_AUDIT_DESTINATION=file` — stderr and
-stdout are write-only, so there would be nothing to read back. It needs its own
+stdout are write-only, so there would be nothing to read back. If the log also has to leave
+the host, `EURODNS_AUDIT_FORWARD_URL` posts each line to a collector **in addition to** the
+file, so shipping it costs neither this tool nor the file's hash chain; see
+[deploy/README.md](deploy/README.md#when-the-server-ships-the-lines-itself). It needs its own
 **`eurodns.audit`** scope rather than riding on `eurodns.read`, because reading who did what
 is not reading DNS data. And in `own` mode an explicit `actor` filter is refused rather than
 quietly ignored, so nobody mistakes a filtered result for the whole picture.
