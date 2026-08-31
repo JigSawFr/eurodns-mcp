@@ -107,6 +107,13 @@ export interface OAuthConfig {
   scopeClaim?: string;
   /** Signature algorithms a token may be signed with. Never empty. */
   algorithms: string[];
+  /**
+   * Prefix the advertised form of a scope carries, or `''` for none.
+   *
+   * Only ever applied on the way out — see `advertisedScope` in `auth/scopes.ts`. Always
+   * ends in `/` when it is not empty, so callers concatenate without deciding.
+   */
+  scopePrefix: string;
 }
 
 export interface HttpConfig {
@@ -348,6 +355,20 @@ function loadAuditForwardConfig(env: NodeJS.ProcessEnv): AuditForwardConfig | un
   };
 }
 
+/**
+ * Normalizes the scope prefix so the rest of the code can concatenate blindly.
+ *
+ * Unset means "advertise scopes as they are named", which is what every authorization server
+ * that takes bare scope names expects. A trailing slash is added when it is missing, because
+ * `api://<app-id>` and `api://<app-id>/` are the same thing to the operator writing it and
+ * only one of them produces a usable scope.
+ */
+function normalizeScopePrefix(raw: string | undefined): string {
+  const prefix = (raw || '').trim();
+  if (prefix === '') return '';
+  return prefix.endsWith('/') ? prefix : `${prefix}/`;
+}
+
 function loadHttpConfig(env: NodeJS.ProcessEnv, transport: 'stdio' | 'http'): HttpConfig {
   const authMode = parseOrThrow(
     z
@@ -468,6 +489,7 @@ function loadHttpConfig(env: NodeJS.ProcessEnv, transport: 'stdio' | 'http'): Ht
       subjectClaim: (env.EURODNS_OAUTH_SUBJECT_CLAIM || 'sub').trim(),
       scopeClaim: (env.EURODNS_OAUTH_SCOPE_CLAIM || '').trim() || undefined,
       algorithms: algorithms.length > 0 ? algorithms : [...DEFAULT_JWT_ALGORITHMS],
+      scopePrefix: normalizeScopePrefix(env.EURODNS_OAUTH_SCOPE_PREFIX),
     };
   }
 

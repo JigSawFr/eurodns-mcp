@@ -219,6 +219,61 @@ describe('OAuth protected resource', () => {
   });
 });
 
+describe('a scope prefix, for an authorization server that qualifies scope names', () => {
+  const PREFIX = 'api://2d91148e-e0b2-48f9-8ee3-d83b11914fa3';
+  const prefixed = (scope: string) => `${PREFIX}/${scope}`;
+
+  function prefixedConfig() {
+    return oauthConfig({ EURODNS_OAUTH_SCOPE_PREFIX: PREFIX });
+  }
+
+  it('advertises the qualified form, which is what a client hands back to the server', async () => {
+    const app = await oauthApp(prefixedConfig());
+    const response = await request(app).get('/.well-known/oauth-protected-resource/mcp');
+
+    expect(response.status).toBe(200);
+    expect(response.body.scopes_supported).toEqual(ALL_SCOPES.map(prefixed));
+  });
+
+  it('names the qualified form in a step-up, since that is what has to be requested', async () => {
+    const app = await oauthApp(prefixedConfig());
+    const response = await request(app)
+      .post('/mcp')
+      .set('Authorization', `Bearer ${await token([SCOPES.read])}`)
+      .set('Accept', 'application/json, text/event-stream')
+      .send(
+        callTool('eurodns_dns_upsert_record', {
+          domainName: 'example.com',
+          type: 'A',
+          host: 'www',
+          rdata: '203.0.113.1',
+        }),
+      );
+
+    expect(response.status).toBe(403);
+    expect(response.headers['www-authenticate']).toContain(`scope="${prefixed(SCOPES.write)}"`);
+    expect(response.body.error_description).toContain(prefixed(SCOPES.write));
+  });
+
+  /**
+   * The one that matters. An authorization server may demand a qualified scope in the
+   * authorization request and still issue a token whose `scp` carries the bare name — that
+   * is exactly what Entra ID does. Applying the prefix to the membership test as well would
+   * look symmetrical and would reject every token the server ever issues.
+   */
+  it('still authorises a token whose scopes carry the bare name', async () => {
+    const { fetchImpl } = stubFetch(() => ({ body: { name: 'example.com', records: [] } }));
+    const app = await oauthApp(prefixedConfig(), fetchImpl);
+    const response = await request(app)
+      .post('/mcp')
+      .set('Authorization', `Bearer ${await token([SCOPES.read])}`)
+      .set('Accept', 'application/json, text/event-stream')
+      .send(callTool('eurodns_dns_get_zone', { domainName: 'example.com' }));
+
+    expect(response.status).toBe(200);
+  });
+});
+
 describe('static token mode', () => {
   const secret = 'k'.repeat(48);
 

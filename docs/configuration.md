@@ -344,6 +344,28 @@ EURODNS_OAUTH_SUBJECT_CLAIM=oid
 Unset by default, which tries `scope`, then `scp`, then `roles` — covering the common
 spellings, including both of Entra ID's. Set it to pin one claim exactly.
 
+### `EURODNS_OAUTH_SCOPE_PREFIX`
+
+Unset by default, which advertises scopes exactly as they are named — `eurodns.read` and the
+rest. Set it when the authorization server requires a **qualified** scope name in the
+authorization request.
+
+```bash
+EURODNS_OAUTH_SCOPE_PREFIX=api://2d91148e-e0b2-48f9-8ee3-d83b11914fa3
+```
+
+A trailing slash is added if you leave it off, so the two forms are equivalent.
+
+**It changes what the server says, never what it checks.** Two things carry the prefix: the
+`scopes_supported` list in the protected resource metadata, and the `scope` a `403` names
+when it asks a client to step up. The comparison against the token's own scopes keeps using
+the bare name, because that is the form the token carries.
+
+That asymmetry is not a quirk of this server — it is Entra ID's. It wants
+`api://<app-id>/eurodns.read` in the authorization request and puts `eurodns.read` in the
+token's `scp`. Advertising the bare name to it earns `AADSTS70011 — invalid scope`, and the
+error arrives at the client with nothing pointing back here.
+
 ### `EURODNS_OAUTH_ALGORITHMS`
 
 Comma-separated. Defaults to the asymmetric set `RS256, RS384, RS512, PS256, PS384, PS512,

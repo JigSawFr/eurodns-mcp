@@ -45,6 +45,7 @@ function verifier(
       audience: AUDIENCE,
       subjectClaim: 'sub',
       algorithms: [...DEFAULT_JWT_ALGORITHMS],
+      scopePrefix: '',
       ...overrides,
     },
     'https://unused.example.com/jwks',

@@ -3,6 +3,7 @@ import type { NextFunction, Request, Response } from 'express';
 // which is how `req.auth` below is typed at all.
 import '@modelcontextprotocol/express';
 import type { ToolRequirement } from '../tools/registry.js';
+import { advertisedScope } from './scopes.js';
 
 interface JsonRpcCall {
   method?: string;
@@ -28,8 +29,15 @@ function calledTools(body: unknown): string[] {
  * which is why the gate reads the tool name from the JSON-RPC body rather than relying on
  * the per-tool check inside the handler — the handler check remains as a second line, and
  * is the only one that applies on stdio.
+ *
+ * `scopePrefix` applies to what this gate *says*, never to what it *checks*. The token was
+ * issued by the authorization server and carries scopes in whatever form that server puts in
+ * `scp` — bare, under Entra ID. Prefixing the membership test below would therefore reject
+ * every valid token. Prefixing the two outputs is what makes the step-up flow work, because
+ * the client has to hand the name back to an authorization server that may qualify it. See
+ * `advertisedScope`.
  */
-export function scopeGate(requirements: Map<string, ToolRequirement>) {
+export function scopeGate(requirements: Map<string, ToolRequirement>, scopePrefix = '') {
   return (req: Request, res: Response, next: NextFunction): void => {
     // The gate is only mounted behind requireBearerAuth, so an absent identity here means
     // the middleware chain was reordered or bypassed. Refuse rather than wave it through:
@@ -47,6 +55,7 @@ export function scopeGate(requirements: Map<string, ToolRequirement>) {
     for (const tool of calledTools(req.body)) {
       const requirement = requirements.get(tool);
       if (!requirement) continue;
+      // Deliberately the bare scope: this is the comparison, not the announcement.
       if (!granted.includes(requirement.scope)) missing.add(requirement.scope);
     }
 
@@ -55,7 +64,7 @@ export function scopeGate(requirements: Map<string, ToolRequirement>) {
       return;
     }
 
-    const scopes = [...missing].join(' ');
+    const scopes = [...missing].map((scope) => advertisedScope(scopePrefix, scope)).join(' ');
     res.set(
       'WWW-Authenticate',
       `Bearer error="insufficient_scope", error_description="Additional scope required", scope="${scopes}"`,

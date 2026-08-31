@@ -21,6 +21,7 @@ import { AuditLogger } from './audit.js';
 import { installShutdown } from './shutdown.js';
 import { toolScopeIndex } from './tools/registry.js';
 import { scopeGate } from './auth/scopeGate.js';
+import { advertisedScope } from './auth/scopes.js';
 import { JwtTokenVerifier, StaticTokenVerifier } from './auth/verifier.js';
 import { discoverAuthorizationServer } from './auth/discovery.js';
 import type { JWTVerifyGetKey } from 'jose';
@@ -112,7 +113,10 @@ async function buildAuthLayer(
       mcpAuthMetadataRouter({
         oauthMetadata: metadata,
         resourceServerUrl,
-        scopesSupported: [...ALL_SCOPES],
+        // Qualified when the authorization server demands it. A client takes these names
+        // straight from here into its authorization request, so the form has to be the one
+        // that server accepts — Entra ID answers AADSTS70011 to a bare name.
+        scopesSupported: ALL_SCOPES.map((scope) => advertisedScope(oauth.scopePrefix, scope)),
         resourceName: SERVER_NAME,
       }),
     );
@@ -127,7 +131,7 @@ async function buildAuthLayer(
   );
 
   if (authMode === 'oauth') {
-    app.use(MCP_ENDPOINT, scopeGate(toolScopeIndex()));
+    app.use(MCP_ENDPOINT, scopeGate(toolScopeIndex(), config.http.oauth?.scopePrefix ?? ''));
   }
 }
 
