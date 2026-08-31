@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/JigSawFr/eurodns-mcp/compare/v0.4.1...v0.5.0) (2026-08-31)
+
+
+### Features
+
+* **oauth:** let a deployment advertise qualified scope names ([#45](https://github.com/JigSawFr/eurodns-mcp/issues/45)) ([8536160](https://github.com/JigSawFr/eurodns-mcp/commit/8536160052091ab54d88e4684d0b421ea69cc5cb))
+
 ## [0.4.1](https://github.com/JigSawFr/eurodns-mcp/compare/v0.4.0...v0.4.1) (2026-08-27)
 
 
