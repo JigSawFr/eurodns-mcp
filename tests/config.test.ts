@@ -93,6 +93,29 @@ describe('what the configuration refuses', () => {
     expect(config.http.oauth?.subjectClaim).toBe('sub');
   });
 
+  it('normalizes the scope prefix, and leaves it empty when unset', () => {
+    const withPrefix = (prefix?: string) =>
+      loadConfig(
+        {
+          ...base,
+          EURODNS_MCP_AUTH: 'oauth',
+          EURODNS_OAUTH_ISSUER: 'https://issuer.example',
+          EURODNS_OAUTH_AUDIENCE: 'api://x',
+          ...(prefix === undefined ? {} : { EURODNS_OAUTH_SCOPE_PREFIX: prefix }),
+        },
+        'http',
+      ).http.oauth?.scopePrefix;
+
+    // Unset is the whole of the previous behaviour: scopes advertised as they are named.
+    expect(withPrefix()).toBe('');
+    expect(withPrefix('   ')).toBe('');
+
+    // Both forms are the same thing to whoever types it, and only one concatenates.
+    expect(withPrefix('api://x')).toBe('api://x/');
+    expect(withPrefix('api://x/')).toBe('api://x/');
+    expect(withPrefix('  api://x  ')).toBe('api://x/');
+  });
+
   it('refuses an algorithm list that names nothing, rather than accepting everything', () => {
     expect(() =>
       loadConfig(

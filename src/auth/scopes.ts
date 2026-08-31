@@ -6,6 +6,23 @@ export function scopeForRisk(risk: RiskClass): string {
   return SCOPES[risk];
 }
 
+/**
+ * The form a scope takes when this server *names* it to a client — never the form it
+ * compares a token against.
+ *
+ * The asymmetry is not an oversight. An authorization server may require a qualified scope
+ * in the authorization request while issuing a token that carries the bare name: Microsoft
+ * Entra ID wants `api://<app-id>/eurodns.read` in the request and puts `eurodns.read` in the
+ * token's `scp`. So the prefix belongs on what we advertise and on what we tell a client to
+ * go and ask for — and nowhere near the membership test that reads the token.
+ *
+ * With no prefix configured this is the identity function, which is the whole of the
+ * behaviour for an authorization server that takes scopes as named.
+ */
+export function advertisedScope(prefix: string, scope: string): string {
+  return prefix === '' ? scope : `${prefix}${scope}`;
+}
+
 export type GuardrailDecision =
   | { allowed: true }
   | { allowed: false; kind: 'deployment'; reason: string }

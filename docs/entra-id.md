@@ -99,9 +99,10 @@ EURODNS_MCP_PUBLIC_URL=https://eurodns-mcp.example.com
 EURODNS_OAUTH_ISSUER=https://login.microsoftonline.com/<TENANT_GUID>/v2.0
 EURODNS_OAUTH_AUDIENCE=<RESOURCE_ID>
 EURODNS_OAUTH_SUBJECT_CLAIM=oid
+EURODNS_OAUTH_SCOPE_PREFIX=api://<RESOURCE_ID>
 ```
 
-Four things about those five lines:
+Five things about those six lines:
 
 **The issuer must carry the tenant GUID.** Not `common`, not your domain name. The server
 fetches the issuer's metadata and **refuses a document whose `issuer` does not match what you
@@ -116,6 +117,14 @@ carries the `api://` form and would be rejected here.)
 **`oid`, not the default `sub`.** Entra's `sub` is a _pairwise pseudonymous identifier_ —
 different for the same person in a different application, and meaningless to a human reading
 the audit log. `oid` is the stable object ID of the user in your tenant.
+
+**The scope prefix is what keeps a client out of `AADSTS70011`.** Entra will not accept a
+bare scope name for a custom API: the authorization request has to name
+`api://<RESOURCE_ID>/eurodns.read`. Without this line the server advertises `eurodns.read`, a
+client takes that name straight from the metadata into its request, and Entra answers
+`AADSTS70011 — invalid scope`. The error surfaces in the client with no indication that the
+cause is here. Note that it prefixes only what the server _advertises_; the token's `scp`
+carries the bare name and is compared as such.
 
 **Nothing else is needed.** `EURODNS_OAUTH_JWKS_URI` is discovered. `EURODNS_OAUTH_ALGORITHMS`
 defaults to the asymmetric set, and Entra signs `RS256`. `EURODNS_OAUTH_SCOPE_CLAIM` already
