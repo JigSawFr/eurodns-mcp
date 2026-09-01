@@ -254,22 +254,29 @@ is a permission.
 
 ### A. Declare the five roles
 
-**App registrations → `eurodns-mcp` → Manage → App roles → Create app role.** Five times:
-
+**App registrations → `eurodns-mcp` → Manage → App roles → Create app role.** Five times.
 Every field on that form is required, `Description` included.
 
-| Display name | Description                                                                           | Allowed member types | Value                 |
-| ------------ | ------------------------------------------------------------------------------------- | -------------------- | --------------------- |
-| Read         | Read anything: domains, DNS zones, subscriptions, invoices                            | **Users/Groups**     | `eurodns.read`        |
-| DNS write    | Create, change and delete records in a DNS zone                                       | **Users/Groups**     | `eurodns.dns.write`   |
-| Destructive  | Irreversible operations outside zone data — deleting profiles, revoking a certificate | **Users/Groups**     | `eurodns.destructive` |
-| Billing      | Operations that create a charge or extend a paid term                                 | **Users/Groups**     | `eurodns.billing`     |
-| Audit        | Read the audit log: who called what, and when                                         | **Users/Groups**     | `eurodns.audit`       |
+> **A role may not be called `eurodns.read`.** An application keeps its app roles and its
+> delegated scopes in **one** namespace, and step 1a already exposed a scope by that name.
+> Reusing it fails on Save with _"It contains duplicate value. Please provide unique value."_
+> The `role.` prefix below is what keeps the two apart while still saying which scope each
+> role stands for; the server is told to strip it.
 
-- **`Value` must be exactly the scope name.** It is what lands in the token, and the server
-  compares it literally against the same five strings it compares `scp` against. A capital
-  letter or a hyphen where a dot belongs, and the role grants nothing. Dots are accepted; the
-  space character is not, and the portal refuses an invalid value as you type it.
+| Display name | Description                                                                           | Allowed member types | Value                      |
+| ------------ | ------------------------------------------------------------------------------------- | -------------------- | -------------------------- |
+| Read         | Read anything: domains, DNS zones, subscriptions, invoices                            | **Users/Groups**     | `role.eurodns.read`        |
+| DNS write    | Create, change and delete records in a DNS zone                                       | **Users/Groups**     | `role.eurodns.dns.write`   |
+| Destructive  | Irreversible operations outside zone data — deleting profiles, revoking a certificate | **Users/Groups**     | `role.eurodns.destructive` |
+| Billing      | Operations that create a charge or extend a paid term                                 | **Users/Groups**     | `role.eurodns.billing`     |
+| Audit        | Read the audit log: who called what, and when                                         | **Users/Groups**     | `role.eurodns.audit`       |
+
+- **`Value` must be the prefix followed by exactly the scope name.** It is what lands in the
+  token; the server strips `role.` and compares what is left, literally, against the same
+  five strings it compares `scp` against. A capital letter or a hyphen where a dot belongs,
+  and the role grants nothing. Dots are accepted; the space character is not, and the portal
+  refuses an invalid value as you type it.
+- `role.` is not magic — any prefix works, as long as it is the one you configure below.
 - **Allowed member types: Users/Groups**, not _Applications_. _Applications_ declares an
   application permission for the client-credentials flow, which is a different thing entirely
   and will not appear in a signed-in user's token.
@@ -305,10 +312,15 @@ One line, added to the six in step 2:
 
 ```bash
 EURODNS_OAUTH_ROLE_CLAIM=roles
+EURODNS_OAUTH_ROLE_PREFIX=role.
 ```
 
-Unset, nothing changes — the assignments sit there harmlessly and the token's scopes remain
-the whole test. That is also how you back out.
+The prefix has to match the one on the role values exactly, and it is stripped before the
+comparison. A role value that does not carry it is ignored rather than trusted — a directory
+hands out roles for its own purposes, and none of them are permissions here.
+
+Unset `EURODNS_OAUTH_ROLE_CLAIM` and nothing changes — the assignments sit there harmlessly
+and the token's scopes remain the whole test. That is also how you back out.
 
 ### What this changes about failure
 
@@ -332,8 +344,8 @@ it directly:
 ```
 
 Three causes, in the order worth checking: the roles were declared but nobody was assigned;
-the caller is on Default Access; or a `Value` does not match its scope character for
-character.
+the caller is on Default Access; or a `Value` does not match `EURODNS_OAUTH_ROLE_PREFIX`
+followed by its scope, character for character.
 
 ---
 

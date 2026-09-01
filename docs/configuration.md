@@ -391,6 +391,25 @@ Three consequences worth knowing before you set it:
 
 [The Entra ID guide](entra-id.md) has the click-path for declaring and assigning the roles.
 
+### `EURODNS_OAUTH_ROLE_PREFIX`
+
+Unset by default, which takes a role value as a scope name exactly. Set it when the identity
+provider forces the roles to be named differently from the scopes; it is stripped from each
+value before the comparison, and a value that does not carry it is ignored rather than
+trusted.
+
+```bash
+EURODNS_OAUTH_ROLE_PREFIX=role.
+```
+
+**Microsoft Entra ID forces this.** An application keeps its app roles and its delegated
+scopes in one namespace, so a role cannot be named `eurodns.read` while a scope of that name
+is exposed — Save answers _"It contains duplicate value."_ Name the roles
+`role.eurodns.read` and so on, and set this to `role.`.
+
+Setting it without `EURODNS_OAUTH_ROLE_CLAIM` is refused at startup: there would be no claim
+to strip it from, and the deployment would read as though per-person permissions were on.
+
 ### `EURODNS_OAUTH_SCOPE_PREFIX`
 
 Unset by default, which advertises scopes exactly as they are named — `eurodns.read` and the

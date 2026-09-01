@@ -137,6 +137,22 @@ describe('what the configuration refuses', () => {
     expect(withRoleClaim('  roles  ')).toBe('roles');
   });
 
+  it('refuses a role prefix with no role claim to strip it from', () => {
+    // Otherwise the prefix reads as though per-person permissions are on, and does nothing.
+    expect(() =>
+      loadConfig(
+        {
+          ...base,
+          EURODNS_MCP_AUTH: 'oauth',
+          EURODNS_OAUTH_ISSUER: 'https://issuer.example',
+          EURODNS_OAUTH_AUDIENCE: 'api://x',
+          EURODNS_OAUTH_ROLE_PREFIX: 'role.',
+        },
+        'http',
+      ),
+    ).toThrow(ConfigError);
+  });
+
   it('refuses a role claim that is the scope claim, which would intersect nothing', () => {
     // The failure this prevents is silent and points the wrong way: both sides read the same
     // claim, every token intersects with itself, and the deployment that asked to grant less

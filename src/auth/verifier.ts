@@ -108,8 +108,31 @@ export function effectiveScopes(payload: JWTPayload, config: OAuthConfig): strin
   }
 
   // Present but disjoint is not a misconfiguration, it is an authorization decision. No log.
-  const entitled = new Set(scopesFrom(payload, roleClaim));
+  const entitled = entitledScopes(scopesFrom(payload, roleClaim), config.rolePrefix);
   return granted.filter((scope) => entitled.has(scope));
+}
+
+/**
+ * Turns the raw values of the role claim into the scope names this server gates on.
+ *
+ * With no prefix configured a role value *is* a scope name, which is what an authorization
+ * server that keeps roles and scopes apart allows.
+ *
+ * Microsoft Entra ID does not: app roles and delegated scopes share one namespace per
+ * application, so a role cannot be called `eurodns.read` while a scope of that name is
+ * already exposed — the portal answers "It contains duplicate value". The prefix is how a
+ * role is named distinctly and still says which scope it stands for. Values that do not
+ * carry it are dropped rather than kept: a directory hands out roles for its own purposes,
+ * and none of them are permissions here.
+ */
+function entitledScopes(values: string[], prefix: string): Set<string> {
+  if (prefix === '') return new Set(values);
+  return new Set(
+    values
+      .filter((value) => value.startsWith(prefix))
+      .map((value) => value.slice(prefix.length))
+      .filter((scope) => scope !== ''),
+  );
 }
 
 /**

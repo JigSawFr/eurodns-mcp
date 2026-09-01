@@ -46,6 +46,7 @@ function verifier(
     subjectClaim: string;
     scopeClaim: string;
     roleClaim: string;
+    rolePrefix: string;
     algorithms: string[];
   }> = {},
 ) {
@@ -56,6 +57,7 @@ function verifier(
       subjectClaim: 'sub',
       algorithms: [...DEFAULT_JWT_ALGORITHMS],
       scopePrefix: '',
+      rolePrefix: '',
       ...overrides,
     },
     'https://unused.example.com/jwks',
@@ -229,6 +231,7 @@ describe('when the identity provider decides per person', () => {
     subjectClaim: 'sub',
     algorithms: [...DEFAULT_JWT_ALGORITHMS],
     scopePrefix: '',
+    rolePrefix: '',
   };
 
   afterEach(() => vi.restoreAllMocks());
@@ -303,6 +306,34 @@ describe('when the identity provider decides per person', () => {
     const scp = [SCOPES.read, SCOPES.write];
     expect(effectiveScopes({ scp, roles: [SCOPES.read] }, config)).toEqual([SCOPES.read]);
     expect(effectiveScopes({ scp, roles: SCOPES.read }, config)).toEqual([SCOPES.read]);
+  });
+
+  /**
+   * Entra ID keeps app roles and delegated scopes in one namespace per application, so a
+   * role cannot be named `eurodns.read` while a scope of that name is exposed — the portal
+   * answers "It contains duplicate value". The prefix is how a role is named distinctly and
+   * still says which scope it stands for.
+   */
+  it('strips the prefix the identity provider forces onto role names', () => {
+    const config = { ...base, roleClaim: 'roles', rolePrefix: 'role.' };
+    const payload = {
+      scp: [...ALL_SCOPES],
+      roles: [`role.${SCOPES.read}`, `role.${SCOPES.write}`],
+    };
+    expect(effectiveScopes(payload, config)).toEqual([SCOPES.read, SCOPES.write]);
+  });
+
+  it('ignores role values that do not carry the prefix', () => {
+    // A directory hands out roles for its own purposes. None of them are permissions here,
+    // and an unprefixed value that happens to read like a scope must not become one.
+    const config = { ...base, roleClaim: 'roles', rolePrefix: 'role.' };
+    const payload = { scp: [...ALL_SCOPES], roles: [SCOPES.destructive, 'Directory.Reader'] };
+    expect(effectiveScopes(payload, config)).toEqual([]);
+  });
+
+  it('treats the prefix on its own as naming no scope', () => {
+    const config = { ...base, roleClaim: 'roles', rolePrefix: 'role.' };
+    expect(effectiveScopes({ scp: [...ALL_SCOPES], roles: ['role.'] }, config)).toEqual([]);
   });
 
   it('applies the intersection to a real token, end to end', async () => {
