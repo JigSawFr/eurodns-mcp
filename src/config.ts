@@ -127,6 +127,8 @@ export interface HttpConfig {
   allowedOrigins: string[];
   /** Largest JSON body accepted, in bytes. Enforced before authentication. */
   maxBodyBytes: number;
+  /** Whether `/` serves the landing page. Off returns the same 404 as any unknown path. */
+  landingPage: boolean;
   /**
    * Bearer secret for `/metrics`. Unset means the endpoint does not exist.
    *
@@ -394,6 +396,10 @@ function loadHttpConfig(env: NodeJS.ProcessEnv, transport: 'stdio' | 'http'): Ht
     authMode,
     staticTokenLabel: (env.EURODNS_MCP_TOKEN_LABEL || 'static-token').trim(),
     allowedOrigins,
+    // On unless an operator says otherwise. The page names nothing a `401` and the protected
+    // resource metadata do not already publish, but an operator may still prefer an address
+    // that identifies itself to no one, and that is their call to make.
+    landingPage: (env.EURODNS_LANDING_PAGE || 'on').trim().toLowerCase() !== 'off',
     maxBodyBytes: parseOrThrow(
       intFromEnv(DEFAULT_MAX_BODY_BYTES),
       env.EURODNS_MAX_BODY_BYTES,

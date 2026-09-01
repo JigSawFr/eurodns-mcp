@@ -9,6 +9,7 @@ import { scopeGate } from '../src/auth/scopeGate.js';
 import { identityFrom, toolScopeIndex } from '../src/tools/registry.js';
 import { loadConfig, type Config } from '../src/config.js';
 import { ALL_SCOPES, AUDIT_SCOPE, SCOPES } from '../src/constants.js';
+import { SERVER_VERSION } from '../src/server.js';
 import { stubFetch } from './harness.js';
 
 const ISSUER = 'https://issuer.example.com';
@@ -317,6 +318,71 @@ describe('health endpoint', () => {
     expect(response.body.version).toBeUndefined();
     expect(response.body.server).toBeUndefined();
     expect(Object.keys(response.body as object)).toEqual(['status']);
+  });
+});
+
+describe('the landing page', () => {
+  it('says what this address is, and where the project lives', async () => {
+    const app = await createApp(httpConfig({ EURODNS_MCP_PUBLIC_URL: PUBLIC_URL }));
+    const response = await request(app).get('/');
+
+    expect(response.status).toBe(200);
+    expect(response.headers['content-type']).toContain('text/html');
+    expect(response.text).toContain('eurodns-mcp-server');
+    expect(response.text).toContain('github.com');
+    // The endpoint a client needs, taken from the configured public URL rather than guessed.
+    expect(response.text).toContain(PUBLIC_URL);
+  });
+
+  /**
+   * The guard, and the reason this page is plainer than it could be.
+   *
+   * `/healthz` withholds the version on purpose — it would hand an unauthenticated caller the
+   * exact build to look up. A public page on a server that administers DNS is held to the
+   * same rule. The tool count and the enabled risk classes go with it: together they tell a
+   * stranger what this deployment will let someone do.
+   *
+   * This exists because "let's show a bit of live status, it looks better" is a genuinely
+   * tempting change, and it would undo that decision without anyone noticing.
+   */
+  it('tells an anonymous visitor nothing about the build or what it permits', async () => {
+    const app = await createApp(httpConfig({ EURODNS_MCP_PUBLIC_URL: PUBLIC_URL }));
+    const { text } = await request(app).get('/');
+
+    expect(text).not.toContain(SERVER_VERSION);
+    for (const scope of ALL_SCOPES) expect(text).not.toContain(scope);
+    // No tool count, in any of the shapes it could take.
+    expect(text).not.toMatch(/\b\d{2,3}\s+tools\b/);
+  });
+
+  it('falls back to the endpoint path when no public URL is configured', async () => {
+    // A token-mode deployment behind a reverse proxy often sets no public URL at all: the
+    // page still has to tell a reader where the endpoint is.
+    const app = await createApp(
+      httpConfig({ EURODNS_MCP_AUTH: 'token', EURODNS_MCP_TOKEN: 'k'.repeat(48) }),
+    );
+    const { text } = await request(app).get('/');
+
+    expect(text).toContain('>/mcp<');
+  });
+
+  it('escapes what an operator put in the configuration', async () => {
+    // EURODNS_MCP_PUBLIC_URL is the one value on the page that did not come from the source.
+    const app = await createApp(
+      httpConfig({ EURODNS_MCP_PUBLIC_URL: 'https://x.example.com/<script>alert(1)</script>' }),
+    );
+    const { text } = await request(app).get('/');
+
+    expect(text).not.toContain('<script>alert(1)</script>');
+    expect(text).toContain('&lt;script&gt;');
+  });
+
+  it('gives an operator who wants no landing page the plain 404 back', async () => {
+    const app = await createApp(httpConfig({ EURODNS_LANDING_PAGE: 'off' }));
+
+    expect((await request(app).get('/')).status).toBe(404);
+    // And nothing else moves.
+    expect((await request(app).get('/healthz')).status).toBe(200);
   });
 });
 

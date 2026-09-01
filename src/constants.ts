@@ -3,6 +3,16 @@
 /** Default EuroDNS User API base URL (`servers[0].url` in the OpenAPI document). */
 export const DEFAULT_BASE_URL = 'https://rest-api.eurodns.com';
 
+/**
+ * The MCP revision this server serves natively.
+ *
+ * Named once here rather than left as prose in three places: the landing page states it to a
+ * would-be client and docs/protocol.md explains it at length. 2025-era clients are answered
+ * on the same endpoint by the SDK's legacy shim — deliberately not enumerated, because which
+ * of those revisions the shim covers is the SDK's business and would go stale here.
+ */
+export const NATIVE_PROTOCOL_REVISION = '2026-07-28';
+
 /** Characters beyond which a tool response is truncated, with an explicit notice. */
 export const DEFAULT_CHARACTER_LIMIT = 25_000;
 

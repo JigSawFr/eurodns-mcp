@@ -282,6 +282,22 @@ EURODNS_ALLOWED_ORIGINS=https://app.example.com,https://admin.example.com
 
 Default `1048576` (1 MB). Request bodies above this are rejected before parsing.
 
+### `EURODNS_LANDING_PAGE`
+
+Default `on`. `GET /` then serves a short page saying what the address is, how to connect,
+and where the project lives — for whoever opens the server's URL in a browser. Set it to
+`off` and `/` returns the same `404` as any other unknown path.
+
+```bash
+EURODNS_LANDING_PAGE=off
+```
+
+The page names the endpoint, the protocol revision and the authentication mode, all of which
+a `401` or the protected resource metadata already publish. It deliberately does **not** name
+the version, the tool count, or which risk classes this deployment permits — the same
+reasoning that keeps the version out of `/healthz`. Turn it off if you would rather the
+address identified itself to no one at all.
+
 ### `EURODNS_RATE_LIMIT` · `EURODNS_RATE_LIMIT_WINDOW_MS`
 
 Defaults `300` requests per `60000` ms, per client, on `/mcp` only. `/healthz` and
