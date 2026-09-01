@@ -256,13 +256,15 @@ is a permission.
 
 **App registrations → `eurodns-mcp` → Manage → App roles → Create app role.** Five times:
 
-| Display name        | Allowed member types | Value                 |
-| ------------------- | -------------------- | --------------------- |
-| EuroDNS read        | **Users/Groups**     | `eurodns.read`        |
-| EuroDNS DNS write   | **Users/Groups**     | `eurodns.dns.write`   |
-| EuroDNS destructive | **Users/Groups**     | `eurodns.destructive` |
-| EuroDNS billing     | **Users/Groups**     | `eurodns.billing`     |
-| EuroDNS audit       | **Users/Groups**     | `eurodns.audit`       |
+Every field on that form is required, `Description` included.
+
+| Display name | Description                                                                           | Allowed member types | Value                 |
+| ------------ | ------------------------------------------------------------------------------------- | -------------------- | --------------------- |
+| Read         | Read anything: domains, DNS zones, subscriptions, invoices                            | **Users/Groups**     | `eurodns.read`        |
+| DNS write    | Create, change and delete records in a DNS zone                                       | **Users/Groups**     | `eurodns.dns.write`   |
+| Destructive  | Irreversible operations outside zone data — deleting profiles, revoking a certificate | **Users/Groups**     | `eurodns.destructive` |
+| Billing      | Operations that create a charge or extend a paid term                                 | **Users/Groups**     | `eurodns.billing`     |
+| Audit        | Read the audit log: who called what, and when                                         | **Users/Groups**     | `eurodns.audit`       |
 
 - **`Value` must be exactly the scope name.** It is what lands in the token, and the server
   compares it literally against the same five strings it compares `scp` against. A capital
@@ -273,8 +275,10 @@ is a permission.
   and will not appear in a signed-in user's token.
 - _Do you want to enable this app role?_ → **Yes**.
 
-`Display name` and `Description` are for the assignment screen and the consent prompt; write
-them for whoever will be picking from the list, not for the server.
+`Display name` and `Description` are read by people, not by the server — they are what an
+administrator sees in the role picker when assigning somebody. They are also the only place
+that says what a role actually permits, so the person doing the assigning is relying on them.
+No need to repeat the product name in every one: the list already sits inside this app.
 
 ### B. Assign the people
 
