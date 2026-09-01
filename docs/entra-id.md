@@ -4,6 +4,9 @@ A worked example of `EURODNS_MCP_AUTH=oauth`, end to end. Nothing here is Entra-
 the server — it validates any compliant authorization server — but Entra has enough sharp
 edges to deserve its own page.
 
+Everything below was run against a live tenant, and every error code in the table near the
+bottom is one this configuration actually produced on the way to working.
+
 **What you get for the trouble:** callers stop sharing one token. Each person authenticates
 as themselves, the five scopes decide who may do what, and the audit log records a real
 identity instead of a shared label.
@@ -13,35 +16,92 @@ below lives in the client, never here.
 
 ---
 
-## What you will create
+## Before you start: the one prerequisite that decides everything
 
-Two app registrations, because Entra separates the API from the thing calling it:
+**You need a hostname on a domain verified in your tenant, serving this server.**
 
-1. a **resource** app — this server, which exposes the scopes;
-2. a **client** app — the harness, which requests them.
+Not a nice-to-have. Entra accepts an `https://` Application ID URI only on a verified custom
+domain or your tenant's initial `*.onmicrosoft.com` domain — and, as the next section
+explains, the Application ID URI has to be this server's public URL. A platform hostname such
+as `*.fly.dev` can never be verified in your tenant, so it can never be that URI.
 
-You will also need your **tenant ID** (a GUID) — Entra admin centre → Overview.
+So the shape of the requirement is:
+
+1. a domain you own, added and **verified** under Entra admin centre → **Custom domain names**;
+2. a hostname under it pointing at this server, with a certificate;
+3. that hostname used consistently as the Application ID URI, `EURODNS_MCP_PUBLIC_URL` and
+   `EURODNS_OAUTH_SCOPE_PREFIX`.
+
+[Deploying](../deploy/README.md) covers attaching a custom domain to the host.
+
+**If that is more than you want**, `EURODNS_MCP_AUTH=token` is a legitimate answer rather than
+a consolation prize: one shared secret, no tenant, no domain, working in a minute. You give
+up per-person identity — the audit log records a label instead of a human — which is the
+right trade for a server one person runs, and the wrong one for a team.
 
 ---
 
-## Step 1 — The resource app
+## Why the Application ID URI is the server's URL
+
+This is the part that costs a day, so it comes before the steps.
+
+MCP requires the client to send an RFC 8707 **resource indicator** — `resource=<the server's
+canonical URL>` — to `/authorize` and `/token`. Entra's v2.0 endpoint does not really support
+that parameter alongside v2 scopes: it compares `resource` against the Application ID URI
+prefix of the scopes being requested, and refuses the request outright when they differ.
+
+So all three of these must be **the same string**:
+
+| Where                                | Value                         |
+| ------------------------------------ | ----------------------------- |
+| Entra: Application ID URI            | `https://mcp.example.com/mcp` |
+| Server: `EURODNS_MCP_PUBLIC_URL`     | `https://mcp.example.com/mcp` |
+| Server: `EURODNS_OAUTH_SCOPE_PREFIX` | `https://mcp.example.com/mcp` |
+
+The default `api://<client-id>` that Entra offers cannot work here, because the client will
+never send that as its resource. Keep the `/mcp` path in the URL rather than serving at the
+root: at least one MCP client normalises a host-only resource by appending a trailing slash,
+which breaks this comparison in a way that is very hard to see.
+
+---
+
+## What you will create
+
+**One app registration.** Microsoft's documentation describes two — a resource app and a
+client app — and that works, but a single registration can both expose the API and be the
+client that calls it, which is one fewer thing to keep in step. Everything below assumes one.
+
+You also need your **tenant ID** (a GUID) — Entra admin centre → Overview.
+
+---
+
+## Step 1 — The app registration
 
 **Entra admin centre → App registrations → New registration.**
 
 - Name: `eurodns-mcp`
 - Supported account types: **single tenant**
-- Redirect URI: leave empty. This app never receives one.
+- Redirect URIs, platform **Web** — add both, because client builds differ:
+  - `https://claude.ai/api/mcp/auth_callback`
+  - `https://claude.com/api/mcp/auth_callback`
 
-Note the **Application (client) ID** it gives you. Call it `<RESOURCE_ID>`; you need it
-twice below.
+Note the **Application (client) ID**. Call it `<APP_ID>`.
+
+Then **Certificates & secrets → New client secret.** Copy it now; Entra shows it once. It
+goes into the client, never into this server.
 
 ### 1a. Expose the API
 
-**Manage → Expose an API → Add a scope.**
+**Manage → Expose an API → Application ID URI → Edit.** Replace the offered `api://<APP_ID>`
+with this server's public URL:
 
-Accept the default Application ID URI, `api://<RESOURCE_ID>`, then add these five scopes.
-Each must be **Admins and users** or **Admins only** — that is your call, and it is a real
-one: `eurodns.destructive` should probably require an admin.
+```
+https://mcp.example.com/mcp
+```
+
+No trailing slash — Entra rejects an identifier URI that ends in one.
+
+Then **Add a scope**, five times:
 
 | Scope name            | What it authorises                        |
 | --------------------- | ----------------------------------------- |
@@ -51,9 +111,26 @@ one: `eurodns.destructive` should probably require an admin.
 | `eurodns.billing`     | Operations that spend money               |
 | `eurodns.audit`       | Reading the audit log                     |
 
-The names must match exactly — the server compares them literally.
+The names must match exactly — the server compares them literally. Each is **Admins and
+users** or **Admins only**; that is your call and a real one, and `eurodns.destructive`
+should probably require an admin.
 
-### 1b. Ask for v2 tokens
+Their full form becomes `https://mcp.example.com/mcp/eurodns.read` and so on. Entra renames
+them for you if you change the Application ID URI later — and **silently invalidates the
+consent granted against the old names, so re-grant it every time.**
+
+> **If the "My APIs" tab is empty** when you come to grant permissions, this step is why: an
+> app appears there only once it has an Application ID URI _and_ at least one exposed scope.
+
+### 1b. Grant the app permission to itself
+
+**Manage → API permissions → Add a permission → My APIs → `eurodns-mcp`** → select the five
+scopes → **Grant admin consent**.
+
+Optionally, back under _Expose an API → Add a client application_, pre-authorise `<APP_ID>`.
+That suppresses the per-user consent prompt.
+
+### 1c. Ask for v2 tokens
 
 **Manage → Manifest.** Set:
 
@@ -61,45 +138,23 @@ The names must match exactly — the server compares them literally.
 "requestedAccessTokenVersion": 2
 ```
 
-> **Do not skip this.** It is the single most common way this configuration fails. With v1
-> tokens Entra issues an issuer of `https://sts.windows.net/<tenant>/` and an audience of
-> `api://<RESOURCE_ID>` — so **both** the issuer check and the audience check below fail, and
-> the error will not point you here.
+> **Do not skip this, and check it first when something is wrong.** It is the single most
+> common way this configuration fails, and it fails most confusingly once the Application ID
+> URI is an `https://` URL: a v1 token then carries that URL in `aud` instead of the bare
+> GUID, and an issuer of `https://sts.windows.net/<tenant>/` instead of the v2.0 form. Both
+> checks below fail at once, the client reports a plain `401`, and nothing points here.
 
 ---
 
-## Step 2 — The client app
-
-A second registration, for the harness that calls the server.
-
-**App registrations → New registration.**
-
-- Name: `eurodns-mcp-client`
-- Redirect URIs, platform **Web** — add **both**, because the desktop and web builds differ:
-  - `https://claude.ai/api/mcp/auth_callback`
-  - `https://claude.com/api/mcp/auth_callback`
-
-Then:
-
-- **Certificates & secrets → New client secret.** Copy it now; Entra shows it once. It goes
-  into the harness, never into this server.
-- **API permissions → Add a permission → My APIs → `eurodns-mcp`** → select the scopes this
-  client should have → **Grant admin consent**.
-
-Optionally, back in the resource app, **Expose an API → Add a client application** and
-pre-authorise this client ID. That suppresses the per-user consent prompt.
-
----
-
-## Step 3 — Configure the server
+## Step 2 — Configure the server
 
 ```bash
 EURODNS_MCP_AUTH=oauth
-EURODNS_MCP_PUBLIC_URL=https://eurodns-mcp.example.com
+EURODNS_MCP_PUBLIC_URL=https://mcp.example.com/mcp
 EURODNS_OAUTH_ISSUER=https://login.microsoftonline.com/<TENANT_GUID>/v2.0
-EURODNS_OAUTH_AUDIENCE=<RESOURCE_ID>
+EURODNS_OAUTH_AUDIENCE=<APP_ID>
 EURODNS_OAUTH_SUBJECT_CLAIM=oid
-EURODNS_OAUTH_SCOPE_PREFIX=api://<RESOURCE_ID>
+EURODNS_OAUTH_SCOPE_PREFIX=https://mcp.example.com/mcp
 ```
 
 Five things about those six lines:
@@ -110,21 +165,19 @@ configured** — which is what stops a hostile metadata document from redirectin
 `/common/` returns the literal placeholder `https://login.microsoftonline.com/{tenantid}/v2.0`
 and will never match. A domain name resolves, but Entra answers with the GUID form anyway.
 
-**The audience is the bare GUID**, not `api://<RESOURCE_ID>`. A v2 access token carries the
-resource's client ID in `aud`. (This is the other half of why step 1b matters: a v1 token
-carries the `api://` form and would be rejected here.)
+**The audience is the bare GUID**, and it stays the bare GUID even though the Application ID
+URI is now a URL. A v2 access token carries the resource's client ID in `aud` whatever its
+identifier URI. (This is the other half of why step 1c matters.)
 
 **`oid`, not the default `sub`.** Entra's `sub` is a _pairwise pseudonymous identifier_ —
 different for the same person in a different application, and meaningless to a human reading
 the audit log. `oid` is the stable object ID of the user in your tenant.
 
-**The scope prefix is what keeps a client out of `AADSTS70011`.** Entra will not accept a
-bare scope name for a custom API: the authorization request has to name
-`api://<RESOURCE_ID>/eurodns.read`. Without this line the server advertises `eurodns.read`, a
-client takes that name straight from the metadata into its request, and Entra answers
-`AADSTS70011 — invalid scope`. The error surfaces in the client with no indication that the
-cause is here. Note that it prefixes only what the server _advertises_; the token's `scp`
-carries the bare name and is compared as such.
+**The scope prefix changes what the server says, never what it checks.** It qualifies two
+outputs — the `scopes_supported` list in the protected resource metadata, and the `scope` a
+`403` names when it asks a client to step up — because those are what a client hands back to
+Entra. The comparison against the token's own scopes keeps using the **bare** name, because
+that is what Entra puts in `scp`. The asymmetry looks like a bug and is not; a test pins it.
 
 **Nothing else is needed.** `EURODNS_OAUTH_JWKS_URI` is discovered. `EURODNS_OAUTH_ALGORITHMS`
 defaults to the asymmetric set, and Entra signs `RS256`. `EURODNS_OAUTH_SCOPE_CLAIM` already
@@ -132,17 +185,76 @@ tries `scp` (delegated) and `roles` (app-only), which is both of Entra's spellin
 
 ---
 
-## Step 4 — Prove it before involving a harness
+## Step 3 — Check the cheap things before reaching for a token
 
-Do this first. It separates a server problem from a client problem, and takes minutes.
+In that order, because two of the three cost nothing.
 
-Grant an **app role** to a client so you can use client credentials, or use any flow that
-gets you a token, then:
+**The manifest.** `requestedAccessTokenVersion` is `2`. One glance, and it is the likeliest
+single cause of a `401` that looks like nothing is wrong.
+
+**What the server advertises.** No credential needed — the metadata document is public:
 
 ```bash
-TOKEN=…   # never commit this; export it in your shell
+curl -s https://mcp.example.com/.well-known/oauth-protected-resource/mcp \
+  | python3 -c 'import sys,json; d=json.load(sys.stdin); print(d["resource"]); print(*d["scopes_supported"], sep="\n")'
+```
 
-curl -s https://eurodns-mcp.example.com/mcp \
+`resource` must equal your Application ID URI exactly, and **every** scope must start with it
+followed by `/`. If those two hold, the half of this that lives here is solved.
+
+**The server's own log.** A rejected token writes one line naming the claim that failed and
+what was expected — never the token itself, and never a claim out of it:
+
+```json
+{
+  "level": "error",
+  "message": "token rejected",
+  "reason": "unexpected \"aud\" claim value",
+  "expected": { "issuer": "…/v2.0", "audience": "<APP_ID>" }
+}
+```
+
+### Getting a token by hand, if you still need one
+
+The device code flow is the least fiddly, with one catch that wastes an afternoon: **it is
+for public clients only.** An app with a client secret answers `invalid_client`, and passing
+the secret does not help. Turn on _Authentication → Allow public client flows_ for the
+duration of the test, then turn it back off.
+
+```bash
+TENANT=…; APP=…
+RESOURCE=https://mcp.example.com/mcp
+
+curl -s -X POST "https://login.microsoftonline.com/$TENANT/oauth2/v2.0/devicecode" \
+  -d client_id="$APP" -d scope="$RESOURCE/eurodns.read offline_access"
+# open the URL it prints, enter the code, then poll:
+curl -s -X POST "https://login.microsoftonline.com/$TENANT/oauth2/v2.0/token" \
+  -d grant_type=urn:ietf:params:oauth:grant-type:device_code \
+  -d client_id="$APP" -d device_code=…
+```
+
+The payload is base64, not encrypted, so you can read what you were issued without any
+secret:
+
+```bash
+echo "$TOKEN" | cut -d. -f2 | base64 -d 2>/dev/null | python3 -m json.tool
+```
+
+| Claim            | Should be                                                                                            |
+| ---------------- | ---------------------------------------------------------------------------------------------------- |
+| `iss`            | `https://login.microsoftonline.com/<TENANT_GUID>/v2.0` — `sts.windows.net` means step 1c was skipped |
+| `aud`            | the bare `<APP_ID>` GUID                                                                             |
+| `ver`            | `2.0`                                                                                                |
+| `scp` or `roles` | the **bare** scope names, e.g. `eurodns.read` — not the qualified form                               |
+
+That last row is worth seeing for yourself. The client _requests_
+`https://mcp.example.com/mcp/eurodns.read`; the token carries `eurodns.read`. That is the
+asymmetry step 2 describes, seen from the other end.
+
+Then present it:
+
+```bash
+curl -s https://mcp.example.com/mcp \
   -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' \
   -H 'Accept: application/json, text/event-stream' \
@@ -151,69 +263,75 @@ curl -s https://eurodns-mcp.example.com/mcp \
 
 A tool list back means issuer, audience and signature all check out.
 
-You can inspect what you were issued without any secret — the payload is base64, not
-encrypted:
+---
 
-```bash
-echo "$TOKEN" | cut -d. -f2 | base64 -d 2>/dev/null | python3 -m json.tool
-```
+## Step 4 — The client
 
-Check three fields:
+Point the client at `https://mcp.example.com/mcp`. Entra publishes no `registration_endpoint`
+(see below), so a client cannot register itself and will ask for credentials:
 
-| Claim            | Should be                                                                                                |
-| ---------------- | -------------------------------------------------------------------------------------------------------- |
-| `iss`            | `https://login.microsoftonline.com/<TENANT_GUID>/v2.0` — **`sts.windows.net` means step 1b was skipped** |
-| `aud`            | the bare `<RESOURCE_ID>` GUID                                                                            |
-| `scp` or `roles` | the bare scope names, e.g. `eurodns.read eurodns.dns.write`                                              |
-
-That last one is worth seeing for yourself: the client _requests_
-`api://<RESOURCE_ID>/eurodns.read`, but the token carries the **bare** name — which is what
-the server compares against.
+- **Client ID**: `<APP_ID>`
+- **Client secret**: the one from step 1 — required, because a redirect URI registered under
+  the **Web** platform makes this a confidential client, and Entra then demands client
+  authentication at the token endpoint.
 
 ---
 
-## What is likely to go wrong
+## Reading an error
 
-| Symptom                                             | Cause                                                                               |
-| --------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| Startup: _"declares issuer … which does not match"_ | `common`, or a domain name, in `EURODNS_OAUTH_ISSUER`. Use the GUID.                |
-| `401`, token looks fine                             | `iss` is `sts.windows.net` → step 1b. Or `aud` is `api://…` → same cause.           |
-| `401` right after a working one                     | The token expired. Entra's default is about an hour.                                |
-| `403`, _"requires the eurodns.x scope"_             | The scope was not requested, or admin consent was not granted. Check `scp`.         |
-| `403` on every call, tokens fine                    | Not OAuth at all — the **EuroDNS API** filters by source IP. Allowlist the host.    |
-| `406` from `curl`                                   | Missing `Accept: application/json, text/event-stream`. See [Protocol](protocol.md). |
+Entra's messages are precise once you know where to look. A client usually shows only a trace
+ID, so:
+
+> Entra admin centre → **Monitoring & health → Sign-in logs** → filter on **Correlation ID**
+> (try **Request ID** too; clients label them inconsistently) → the row's **Basic info** tab
+> carries the `AADSTS` code and a plain-language failure reason.
+
+**Check both tabs** — _User sign-ins_ and _Service principal sign-ins_. Which one a refusal
+lands in depends on where in the exchange it happened, and looking in only one is how people
+conclude, wrongly, that nothing was logged.
+
+| Code                                     | Cause                                                                                                                                              |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AADSTS9010010`                          | `resource` does not match the scopes' prefix. Application ID URI, `EURODNS_MCP_PUBLIC_URL` and `EURODNS_OAUTH_SCOPE_PREFIX` are not all one string |
+| `AADSTS500011`                           | No app in the tenant carries that Application ID URI — step 1a was not applied, or was applied to another app                                      |
+| `AADSTS700016`                           | The `client_id` sent does not exist in the tenant. Usually the client fell back to a hosted identity; set your own Client ID                       |
+| `AADSTS70011`                            | A bare scope name where Entra wants the qualified form — `EURODNS_OAUTH_SCOPE_PREFIX` unset or wrong                                               |
+| `AADSTS50011`                            | Redirect URI not registered, or registered under the wrong platform                                                                                |
+| `AADSTS7000215`                          | Wrong client secret                                                                                                                                |
+| `AADSTS65001`                            | Admin consent not granted — or granted before the Application ID URI changed, which invalidates it                                                 |
+| `invalid_client` on the device code flow | Confidential client; that flow needs _Allow public client flows_                                                                                   |
+| `401`, token looks fine                  | v1 token: step 1c. Check `ver`, `iss` and `aud` together                                                                                           |
+| `401` right after a working one          | The token expired. Entra's default is about an hour                                                                                                |
+| `403`, _"requires the eurodns.x scope"_  | The scope was not requested, or consent was not granted for it. Check `scp`                                                                        |
+| `403` on every call, tokens fine         | Not OAuth at all — the **EuroDNS API** filters by source IP. Allowlist the host's egress address                                                   |
+| `406` from `curl`                        | Missing `Accept: application/json, text/event-stream`. See [Protocol](protocol.md)                                                                 |
+
+Startup failures are separate and say so on stderr — _"declares issuer … which does not
+match"_ means `common`, or a domain name, in `EURODNS_OAUTH_ISSUER`. Use the GUID.
 
 ---
 
-## The part that may not work, and it is not the server
+## What Entra does not do
 
-**Entra does not support Dynamic Client Registration.** Verified directly — its metadata
-document publishes no `registration_endpoint`:
+**No Dynamic Client Registration.** Its metadata publishes no `registration_endpoint`:
 
 ```bash
 curl -s https://login.microsoftonline.com/<TENANT_GUID>/v2.0/.well-known/openid-configuration \
-  | python3 -c 'import sys,json; d=json.load(sys.stdin); print("registration_endpoint" in d)'
+  | python3 -c 'import sys,json; print("registration_endpoint" in json.load(sys.stdin))'
 # False
 ```
 
-That alone is survivable: Claude Desktop's connector has Client ID and Client Secret fields
-under Advanced settings, which is what step 2 produced.
+Survivable, and step 4 is the answer: supply a Client ID and secret yourself.
 
-The real risk is **RFC 8707 resource indicators**. MCP requires the client to send
-`resource=<server URL>` to `/authorize` and `/token`. Entra validates that parameter against
-the registered Application ID URI and expects scopes in `api://<id>/<scope>` form. Where the
-two disagree the flow fails in a distinctive way: authorization succeeds, and then the client
-never exchanges the code.
+**No `code_challenge_methods_supported`**, although Entra does implement PKCE with S256. A
+client that checks that field before starting will refuse, and there is nothing to configure
+away — that one is between the client and Entra.
 
-Entra also does not advertise `code_challenge_methods_supported`, although it does implement
-PKCE with S256. A client that checks that field before starting will refuse.
-
-Neither is something this server can fix, and the published workaround — an OAuth proxy that
-rewrites the parameters between client and Entra — is a project of its own. **So do step 4
-first.** If the token validates and the connector still will not complete, you have learned
-the server is correct and the gap is in the client-to-Entra handshake, and you can fall back
-to `EURODNS_MCP_AUTH=token` with the stdio bridge in [Protocol](protocol.md) while keeping
-this configuration for the day the handshake catches up.
+**No real support for RFC 8707 resource indicators**, which is the root of everything on this
+page. Entra treats `resource` as the legacy v1 parameter and validates it against the
+Application ID URI rather than honouring it as an audience request. Aligning the two, as this
+page does, works _with_ that behaviour rather than around it — nothing in this server rewrites
+or hides a parameter to make it fit.
 
 ---
 

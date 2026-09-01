@@ -19,10 +19,10 @@ export default defineConfig({
       // why. What is not a move is deleting a test to make the ratio work, or nudging the
       // floor down as a reflex — at that point the number stops meaning anything.
       thresholds: {
-        statements: 91.15,
-        branches: 85.18,
-        functions: 91.34,
-        lines: 92.19,
+        statements: 91.18,
+        branches: 85.21,
+        functions: 91.38,
+        lines: 92.23,
       },
     },
   },
