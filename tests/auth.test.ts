@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeAll } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { SignJWT, exportJWK, generateKeyPair, type JWK } from 'jose';
 import { createLocalJWKSet } from 'jose';
 import { ConfigError, loadConfig, type Config } from '../src/config.js';
@@ -134,6 +134,83 @@ describe('JWT verification', () => {
     const token = await mintToken({ preferred_username: 'someone@example.net' });
     const info = await verifier({ subjectClaim: 'preferred_username' }).verifyAccessToken(token);
     expect((info.extra as { subject: string }).subject).toBe('someone@example.net');
+  });
+});
+
+describe('what a rejection tells the operator', () => {
+  /**
+   * Collects what the process writes to stderr, so a test can read the operational log the
+   * way whoever runs the server would.
+   */
+  function captureStderr(): { lines: () => string[]; restore: () => void } {
+    const written: string[] = [];
+    const spy = vi
+      .spyOn(process.stderr, 'write')
+      .mockImplementation((chunk: string | Uint8Array) => {
+        written.push(typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8'));
+        return true;
+      });
+    return { lines: () => written, restore: () => spy.mockRestore() };
+  }
+
+  afterEach(() => vi.restoreAllMocks());
+
+  it('names the claim that failed, and what was expected instead', async () => {
+    const capture = captureStderr();
+    // A token minted for somebody else: the audience check is the one that must catch it.
+    await expect(
+      verifier().verifyAccessToken(await mintToken({}, 'https://elsewhere.example.com')),
+    ).rejects.toThrow();
+    capture.restore();
+
+    const entry = JSON.parse(capture.lines().join('').trim()) as {
+      level: string;
+      message: string;
+      reason: string;
+      expected: { issuer: string; audience: string };
+    };
+    expect(entry.level).toBe('error');
+    expect(entry.message).toBe('token rejected');
+    expect(entry.reason).toContain('aud');
+    // Without this half the line says something failed but not what would have passed.
+    expect(entry.expected.audience).toBe(AUDIENCE);
+    expect(entry.expected.issuer).toBe(ISSUER);
+  });
+
+  it('says so when the static secret does not match', async () => {
+    const capture = captureStderr();
+    await expect(
+      new StaticTokenVerifier('s'.repeat(40), 'ci-runner').verifyAccessToken('x'.repeat(40)),
+    ).rejects.toThrow();
+    capture.restore();
+
+    expect(capture.lines().join('')).toContain('EURODNS_MCP_TOKEN');
+  });
+
+  /**
+   * The guard. A log line is written to be read by people and shipped to collectors, so
+   * anything in it outlives the request by a long way. A token there is a token to rotate,
+   * and the claims around it carry personal data.
+   *
+   * This is the assertion that stops a future "let's make the diagnosis richer" from
+   * quietly putting the credential in the log.
+   */
+  it('never writes the token, or anything out of it, into the log', async () => {
+    const token = await mintToken({}, 'https://elsewhere.example.com');
+    const capture = captureStderr();
+    await expect(verifier().verifyAccessToken(token)).rejects.toThrow();
+    await expect(
+      new StaticTokenVerifier('s'.repeat(40), 'ci-runner').verifyAccessToken('x'.repeat(40)),
+    ).rejects.toThrow();
+    capture.restore();
+
+    const logged = capture.lines().join('');
+    expect(logged).not.toContain(token);
+    // Nor any of its three segments on their own, nor the claims they decode to.
+    for (const segment of token.split('.')) expect(logged).not.toContain(segment);
+    expect(logged).not.toContain('user@example.com');
+    expect(logged).not.toContain('test-client');
+    expect(logged).not.toContain('x'.repeat(40));
   });
 });
 

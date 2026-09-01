@@ -16,7 +16,7 @@ the protection.
 
 | Platform   | Dedicated egress IP                     | Cost                     | Persistent disk |
 | ---------- | --------------------------------------- | ------------------------ | --------------- |
-| **Fly.io** | yes                                     | ~$2–4 / month            | yes (volumes)   |
+| **Fly.io** | yes, `allocate-egress`                  | $3.60 / month            | yes (volumes)   |
 | Railway    | not guaranteed — may be shared          | included on Pro          | yes             |
 | Render     | yes, 3 exclusive IPv4                   | $100 / month per set     | yes             |
 | Vercel     | shared pool; dedicated needs Enterprise | $100 / month per project | **no**          |
@@ -69,17 +69,82 @@ fly launch --no-deploy -c deploy/fly.toml   # or move the file to the root and d
 # ignores `initial_size`, so an existing volume always wins.
 fly volumes create data --size 1
 
-# The whole point: a dedicated outbound IP to allowlist at EuroDNS.
-fly ips allocate-v4 --shared=false
-fly ips list                       # allowlist the address it prints
+# The whole point: a static *outbound* address to allowlist at EuroDNS. See below — this is
+# not the same command as the one that gives the app an inbound address.
+fly ips allocate-egress -r ams
+fly ips list                       # the egress IPv4 is the one EuroDNS needs
 
 fly secrets set EURODNS_APP_ID=… EURODNS_API_KEY=… \
                 EURODNS_MCP_AUTH=token EURODNS_MCP_TOKEN="$(openssl rand -hex 32)"
 fly deploy
 ```
 
-`min_machines_running = 0` lets the machine stop when idle and start on the next request.
-Drop it to keep the server warm.
+### Inbound and outbound are different addresses
+
+`fly ips allocate-v4` gives the **app** an address the world connects _to_. It has no effect
+whatsoever on the address the app connects _from_, which is the one EuroDNS filters on. Only
+`fly ips allocate-egress` sets that. Getting this wrong costs a couple of dollars a month and
+leaves every upstream call failing exactly as before.
+
+An egress address is app-scoped and survives deploys and machine replacement, at $3.60/month
+for the IPv4 (IPv6 comes with it). Four things about it:
+
+- **It is per region.** A Machine can only use an egress address allocated in _its own_
+  region, so a second region needs a second address. Keep `primary_region` and the allocation
+  in step.
+- **Existing Machines pick it up after a delay.** Restart after allocating, or the running
+  Machine keeps its old route and you will conclude, wrongly, that the allocation failed.
+- **Verify from inside**, because that is the only measurement that counts. The image ships
+  no `curl`, but Node has `fetch`:
+
+  ```bash
+  fly ssh console -a <app>
+  node -e "fetch('https://api.ipify.org').then(r=>r.text()).then(console.log)"
+  ```
+
+- One address covers 64 Machines and 1024 concurrent connections per destination IP. Neither
+  binds a single-machine deployment.
+
+### A custom domain
+
+Needed if you want OAuth against Entra ID, which requires the server to answer on a hostname
+you can verify in your tenant — see [Entra ID](../docs/entra-id.md). Otherwise optional.
+
+```bash
+fly certs add mcp.example.com -a <app>
+fly certs show mcp.example.com -a <app>   # prints the DNS records to create
+```
+
+Point the name at the app with a **CNAME** to `<app>.fly.dev` rather than `A`/`AAAA` records.
+It follows any address change Fly makes, and it avoids this trap: releasing the shared IPv4
+while an `A` record still points at it leaves the name resolving to an address that no longer
+serves your app. The symptom is a TLS handshake cut off mid-negotiation, which reads exactly
+like a missing certificate and sends you looking in the wrong place for an hour. If the
+certificate is issued and the name still fails, resolve it and compare against `<app>.fly.dev`
+before suspecting anything else.
+
+### Two log lines that are not failures
+
+`App … has excess capacity, autostopping machine` is level **info**, not an error. It is
+`auto_stop_machines` doing what the config asks; the next request starts the Machine again, at
+the cost of a second or two. `min_machines_running = 1` removes the cold start and keeps the
+Machine billed around the clock.
+
+It also explains a graph that looks alarming: repeated stop/start cycles create a new series
+each time, so their sum makes **`mem_total`** climb in steps. A memory leak would raise
+`mem_used`, which stays flat. Read which series is moving before believing the shape.
+
+`[PU01] client problem: no host specified in headers or uri` comes from Fly's proxy with
+`instance: null` — the request never reached the app. It is a connection with no `Host` header
+or SNI, which on a public IPv4 is constant background noise from scanners.
+
+### The Fly.io GitHub integration will rewrite this config
+
+Connecting the repository makes Fly open a pull request titled _New files from Fly.io Launch_
+that regenerates `deploy/fly.toml`. It deletes every comment in the file, and it has already
+dropped `initial_size` once. Treat it as a proposal to read, not a patch to merge: take the
+keys it adds, keep the prose. Its non-conventional title fails the `pr-title` check, which is
+the signal to look rather than to override.
 
 **This deployment is single-instance.** A Fly volume attaches to one machine, and the audit
 log is a file on it. Scaling out means shipping the log to a collector instead — which also

@@ -351,10 +351,15 @@ rest. Set it when the authorization server requires a **qualified** scope name i
 authorization request.
 
 ```bash
-EURODNS_OAUTH_SCOPE_PREFIX=api://2d91148e-e0b2-48f9-8ee3-d83b11914fa3
+EURODNS_OAUTH_SCOPE_PREFIX=https://mcp.example.com/mcp
 ```
 
 A trailing slash is added if you leave it off, so the two forms are equivalent.
+
+**Under Entra ID this is the server's own public URL**, not an `api://` identifier, and it
+has to equal the Application ID URI exactly. That is not a stylistic preference — Entra
+compares it against the `resource` parameter the client is required to send. See the
+[Entra ID guide](entra-id.md) for why, and for the error it produces when they differ.
 
 **It changes what the server says, never what it checks.** Two things carry the prefix: the
 `scopes_supported` list in the protected resource metadata, and the `scope` a `403` names

@@ -5,6 +5,29 @@ import type { OAuthTokenVerifier } from '@modelcontextprotocol/express';
 import type { OAuthConfig } from '../config.js';
 import { ALL_SCOPES } from '../constants.js';
 
+/**
+ * Reports a rejected token on stderr, once, before the error goes back to the caller.
+ *
+ * Without this a rejection is invisible to whoever runs the server: the SDK answers `401`
+ * and the reason leaves with it. An operator watching the logs sees a healthy process
+ * refusing every request and has nothing to go on — which is exactly how a misconfigured
+ * `requestedAccessTokenVersion` costs an afternoon.
+ *
+ * `expected` carries configuration, never a credential. The token itself and every claim in
+ * it stay out: a token in a log file is a token to rotate, and the claims carry personal
+ * data that has no business being in an operational log.
+ */
+function reportRejection(reason: string, expected?: Record<string, string>): void {
+  process.stderr.write(
+    `${JSON.stringify({
+      level: 'error',
+      message: 'token rejected',
+      reason,
+      ...(expected ? { expected } : {}),
+    })}\n`,
+  );
+}
+
 /** Reads scopes from whichever claim the authorization server uses. */
 export function scopesFrom(payload: JWTPayload, preferredClaim?: string): string[] {
   const candidates = preferredClaim ? [preferredClaim] : ['scope', 'scp', 'roles'];
@@ -44,10 +67,14 @@ export class JwtTokenVerifier implements OAuthTokenVerifier {
         algorithms: this.config.algorithms,
       }));
     } catch (cause) {
-      throw new OAuthError(
-        OAuthErrorCode.InvalidToken,
-        `Token rejected: ${cause instanceof Error ? cause.message : 'verification failed'}`,
-      );
+      // jose names the offending claim — `unexpected "aud" claim value`, `unexpected "iss"
+      // claim value`, `"exp" claim timestamp check failed` — so the message is the diagnosis.
+      const reason = cause instanceof Error ? cause.message : 'verification failed';
+      reportRejection(reason, {
+        issuer: this.config.issuer,
+        audience: this.config.audience,
+      });
+      throw new OAuthError(OAuthErrorCode.InvalidToken, `Token rejected: ${reason}`);
     }
 
     const subjectClaim = this.config.subjectClaim;
@@ -92,7 +119,11 @@ export class StaticTokenVerifier implements OAuthTokenVerifier {
     // comparing directly would leak the expected length through an early return.
     const matches = timingSafeEqual(digest(token), this.expected);
 
-    if (!matches) throw new OAuthError(OAuthErrorCode.InvalidToken, 'Token rejected');
+    if (!matches) {
+      // No `expected` here: the only thing this verifier compares against is the secret.
+      reportRejection('static token does not match EURODNS_MCP_TOKEN');
+      throw new OAuthError(OAuthErrorCode.InvalidToken, 'Token rejected');
+    }
 
     return {
       token,

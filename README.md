@@ -174,6 +174,27 @@ One setting catches everyone once: inside a container the server listens on `0.0
 it **refuses to start on a non-loopback address without authentication**. Set
 `EURODNS_MCP_AUTH` to `token` or `oauth`.
 
+### Which of those two
+
+The choice is not about how secure you want to be — both are — but about whether callers need
+separate identities, and it has a cost you should see coming.
+
+**`token`** is one shared secret in a header. It works in a minute, needs nothing but the
+server, and is the right answer for a deployment one person uses. What you give up is
+attribution: the audit log records a label, so it can tell you a destructive call happened but
+not who made it.
+
+**`oauth`** gives each person their own credential, lets the five scopes decide who may do
+what, and puts a real identity in the audit log. Its entry price is a hostname on a domain
+your identity provider will accept — with Microsoft Entra ID that means a domain **verified in
+your tenant**, because the server's public URL has to double as the Application ID URI. A
+platform hostname like `*.fly.dev` cannot be verified, so the domain is not optional there.
+[Entra ID](docs/entra-id.md) works the whole thing through, including the errors it produces
+when the three names involved fall out of step.
+
+Starting on `token` and moving to `oauth` later costs nothing but a restart: no data
+migration, no change to how tools behave.
+
 ## Contributing
 
 [CONTRIBUTING.md](CONTRIBUTING.md) has the workflow, and

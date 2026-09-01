@@ -220,7 +220,7 @@ describe('OAuth protected resource', () => {
 });
 
 describe('a scope prefix, for an authorization server that qualifies scope names', () => {
-  const PREFIX = 'api://2d91148e-e0b2-48f9-8ee3-d83b11914fa3';
+  const PREFIX = 'https://mcp.example.com/mcp';
   const prefixed = (scope: string) => `${PREFIX}/${scope}`;
 
   function prefixedConfig() {
