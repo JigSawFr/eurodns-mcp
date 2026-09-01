@@ -26,6 +26,24 @@ Every tool name is prefixed with `eurodns_` so it cannot collide with another se
 carries `readOnlyHint`, `destructiveHint` and `idempotentHint` annotations derived from what
 the operation actually does.
 
+## Pagination
+
+Every tool over a list endpoint takes four ordinary arguments — `page`, `size`, `sortField`
+and `sortOrder` — instead of the `pagination-*` headers the API expects. The server maps them
+back onto the headers.
+
+`size` accepts **`-1`**, which is the API's own request for every result in a single page.
+That is the cheapest way to pull a whole portfolio: one call instead of one per page, and no
+guessing at how many pages there are. Any other value must be between 1 and 500.
+
+The catch is what comes back. A full inventory is easily hundreds of kilobytes, and
+[`EURODNS_CHARACTER_LIMIT`](configuration.md) caps what one result may return — 25 000
+characters by default, which a large portfolio will exceed. Past that cap the server drops
+the indentation first and truncates only if that is still not enough, always with a notice
+saying how much was omitted. So `-1` is right for a caller that raised the limit to match,
+and wrong for one that did not: it will get the same truncation, having paid for the whole
+list upstream.
+
 ## The DNS workflow tools
 
 `PUT /dns-zones/{domain}` replaces the **entire** zone document: a caller that sends a

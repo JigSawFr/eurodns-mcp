@@ -63,6 +63,46 @@ describe('tool surface', () => {
     await close();
   });
 
+  /**
+   * `-1` is the API's own spelling for "everything in one page". Rejecting it made this
+   * server narrower than the API it wraps and pushed callers into paginating by hand for a
+   * result the vendor returns whole.
+   */
+  it("passes -1 through as the API's own request for a single page", async () => {
+    const { fetchImpl, requests } = stubFetch(() => ({ body: [] }));
+    const { client, close } = await connect({ fetchImpl });
+
+    const result = await client.callTool({
+      name: 'eurodns_invoice_list',
+      arguments: { size: -1 },
+    });
+
+    expect(isError(result)).toBe(false);
+    expect(requests[0]?.headers['pagination-size']).toBe('-1');
+    await close();
+  });
+
+  it('still refuses a size that is neither in range nor -1, before dispatching', async () => {
+    // Stubbed so that a *valid* call would succeed. Without that, the upstream failure
+    // makes every call an error and the assertion proves nothing — which is exactly what
+    // the first version of this test did.
+    const { fetchImpl, requests } = stubFetch(() => ({ body: [] }));
+    const { client, close } = await connect({ fetchImpl });
+
+    // The 500 ceiling stays: -1 is a documented sentinel, not an invitation to any integer.
+    for (const size of [0, -2, 501]) {
+      const result = await client.callTool({
+        name: 'eurodns_invoice_list',
+        arguments: { size },
+      });
+      expect(isError(result), `size ${size} should be refused`).toBe(true);
+    }
+
+    // The real assertion: refused by the schema, so the API was never called.
+    expect(requests).toHaveLength(0);
+    await close();
+  });
+
   it('renames hyphenated path parameters to camelCase', async () => {
     const { client, close } = await connect();
     const { tools } = await client.listTools();

@@ -30,7 +30,18 @@ const TARGET_ARGUMENT_NAMES = ['domainName', 'subscriptionId', 'id', 'certificat
 
 const paginationShape: ZodRawShape = {
   page: z.number().int().min(1).optional().describe('1-based page number.'),
-  size: z.number().int().min(1).max(500).optional().describe('Results per page.'),
+  // `-1` is the API's own spelling for "everything in one page", documented on the
+  // `pagination-size` header. Rejecting it made this server narrower than the API it wraps,
+  // and pushed callers into paginating by hand for a result the vendor will return whole.
+  // The 500 ceiling stays as a guard against a typo asking for a million.
+  size: z
+    .number()
+    .int()
+    .refine((value) => value === -1 || (value >= 1 && value <= 500), {
+      message: 'size must be between 1 and 500, or -1 for every result in one page',
+    })
+    .optional()
+    .describe('Results per page, or -1 for all results in a single page.'),
   sortField: z.string().optional().describe('Field to sort by.'),
   sortOrder: z.enum(['ASC', 'DESC']).optional().describe('Sort direction.'),
 };

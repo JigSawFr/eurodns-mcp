@@ -61,6 +61,17 @@ EURODNS_MAX_RETRIES=0     # fail fast; useful when debugging upstream errors
 Default `25000`. Caps the characters one tool result may return, so a large zone or invoice
 list cannot exhaust a model's context in a single call. Positive integer.
 
+Results are rendered indented while they fit. Past the limit the indentation is dropped
+before any data is — a whole compact answer beats a truncated readable one — and only a
+payload still too large after that is cut, with a notice naming how much was omitted. A
+result is never silently partial.
+
+**Raise it for a programmatic caller.** The default is sized for a model reading the result,
+where a very long list is a cost rather than an answer. A dashboard or a script parsing the
+JSON has no such limit and truncation is pure loss for it; set this to whatever that caller
+can actually handle. The trade is real either way — see
+[`eurodns_domain_search`](tools.md) and its `size: -1`.
+
 ## Guardrails
 
 These decide what the deployment permits **at all**, before any question of who is calling.

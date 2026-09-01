@@ -9,16 +9,26 @@ export interface FormatResult {
 }
 
 export function formatJson(value: unknown, characterLimit: number): FormatResult {
-  const serialized = JSON.stringify(value, null, 2) ?? 'null';
-  if (serialized.length <= characterLimit) {
-    return { text: serialized, truncated: false };
+  const pretty = JSON.stringify(value, null, 2) ?? 'null';
+  if (pretty.length <= characterLimit) {
+    return { text: pretty, truncated: false };
   }
 
-  const kept = serialized.slice(0, characterLimit);
-  const omitted = serialized.length - kept.length;
+  // Indentation is not information. On a list of records with nested objects — a domain
+  // carries four contact blocks — pretty-printing is a large share of the payload, and it
+  // is the share that buys nothing once the result is long enough that nobody reads it by
+  // eye. Dropping it before dropping *data* is the right order: a whole compact answer
+  // beats a truncated readable one.
+  const compact = JSON.stringify(value) ?? 'null';
+  if (compact.length <= characterLimit) {
+    return { text: compact, truncated: false };
+  }
+
+  const kept = compact.slice(0, characterLimit);
+  const omitted = compact.length - kept.length;
   return {
     text:
-      `${kept}\n\n[truncated: ${omitted} of ${serialized.length} characters omitted. ` +
+      `${kept}\n\n[truncated: ${omitted} of ${compact.length} characters omitted. ` +
       'Narrow the request with filters or pagination to see the rest.]',
     truncated: true,
   };
