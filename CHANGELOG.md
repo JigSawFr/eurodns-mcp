@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.6.0](https://github.com/JigSawFr/eurodns-mcp/compare/v0.5.0...v0.6.0) (2026-09-01)
+
+
+### Features
+
+* **http:** serve a page at / describing the server ([#51](https://github.com/JigSawFr/eurodns-mcp/issues/51)) ([bd73e62](https://github.com/JigSawFr/eurodns-mcp/commit/bd73e628e8c9aa4088c52efe327e15c81bc36511))
+
+
+### Bug fixes
+
+* **deploy:** restore the volume size and the reasoning fly.toml lost ([#48](https://github.com/JigSawFr/eurodns-mcp/issues/48)) ([e545947](https://github.com/JigSawFr/eurodns-mcp/commit/e545947a8eaf06b6c0f3d8e7557073bf7f8ab3b3))
+
+
+### Documentation
+
+* rewrite the Entra ID and Fly.io guides around what deploying taught ([#50](https://github.com/JigSawFr/eurodns-mcp/issues/50)) ([75df7f3](https://github.com/JigSawFr/eurodns-mcp/commit/75df7f3295c871da86f6aebf6f2aa8edb95a8e05))
+
 ## [0.5.0](https://github.com/JigSawFr/eurodns-mcp/compare/v0.4.1...v0.5.0) (2026-08-31)
 
 
