@@ -349,6 +349,9 @@ worth alerting on. The round that merely asks writes nothing — it is not an at
 ## Verifying a deployment
 
 ```bash
+# The friendliest check: a browser-readable page saying what this address is.
+curl https://your-host/
+
 curl https://your-host/healthz
 
 curl -X POST https://your-host/mcp \

@@ -8,7 +8,9 @@ EURODNS_MCP_AUTH=token EURODNS_MCP_TOKEN="$(openssl rand -hex 32)" \
     ghcr.io/jigsawfr/eurodns-mcp:latest
 ```
 
-The endpoint is `POST /mcp`; `GET /healthz` reports readiness without authentication.
+The endpoint is `POST /mcp`; `GET /healthz` reports readiness without authentication, and
+`GET /` serves a short page describing the server for anyone who opens its URL in a browser
+(`EURODNS_LANDING_PAGE=off` removes it).
 Sessions are not used, so any number of instances can sit behind a load balancer.
 
 The server **refuses to start on a non-loopback address without authentication**. Set

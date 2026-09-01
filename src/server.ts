@@ -24,17 +24,32 @@ export const SERVER_NAME = 'eurodns-mcp-server';
  * relative path holds in all three layouts because `src/` and `dist/` both sit one level
  * under the package root: running from source, from the published package, and from the
  * image, where the Dockerfile puts `package.json` in `/app` and the build in `/app/dist`.
+ *
+ * The same argument covers the description and repository URL the landing page shows, which
+ * is why this reads a named field rather than the version alone.
  */
-function readPackageVersion(): string {
+export function packageField(name: 'version' | 'description' | 'homepage'): string | undefined {
   try {
-    const pkg = createRequire(import.meta.url)('../package.json') as { version?: unknown };
-    return typeof pkg.version === 'string' && pkg.version ? pkg.version : UNKNOWN_VERSION;
+    const pkg = createRequire(import.meta.url)('../package.json') as Record<string, unknown>;
+    const value = pkg[name];
+    return typeof value === 'string' && value ? value : undefined;
   } catch {
-    return UNKNOWN_VERSION;
+    return undefined;
   }
 }
 
-export const SERVER_VERSION = readPackageVersion();
+export const SERVER_VERSION = packageField('version') ?? UNKNOWN_VERSION;
+
+/**
+ * Description and repository, resolved once beside the version and for the same reason.
+ *
+ * The fallbacks exist because `packageField` can return nothing — its `createRequire` sits in
+ * a `try` — not because these fields are ever absent from this package. Keeping all three
+ * resolutions together means one pattern to understand rather than three scattered `??`.
+ */
+export const SERVER_DESCRIPTION =
+  packageField('description') ?? 'Model Context Protocol server for the EuroDNS User API.';
+export const SERVER_REPOSITORY = packageField('homepage') ?? 'https://github.com/';
 
 export interface BuildOptions {
   config: Config;

@@ -19,10 +19,13 @@ export default defineConfig({
       // why. What is not a move is deleting a test to make the ratio work, or nudging the
       // floor down as a reflex — at that point the number stops meaning anything.
       thresholds: {
-        statements: 91.18,
-        branches: 85.21,
-        functions: 91.38,
-        lines: 92.23,
+        statements: 91.29,
+        // Down 0.10 from 85.21 in the commit that added the landing page: three `??`
+        // fallbacks in server.ts guard a `createRequire` that only fails in a layout this
+        // package does not produce. 11 of the 14 branches added are covered.
+        branches: 85.11,
+        functions: 91.54,
+        lines: 92.33,
       },
     },
   },

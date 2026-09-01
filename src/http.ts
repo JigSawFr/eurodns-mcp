@@ -22,6 +22,7 @@ import { installShutdown } from './shutdown.js';
 import { toolScopeIndex } from './tools/registry.js';
 import { scopeGate } from './auth/scopeGate.js';
 import { advertisedScope } from './auth/scopes.js';
+import { landingPage } from './landing.js';
 import { JwtTokenVerifier, StaticTokenVerifier } from './auth/verifier.js';
 import { discoverAuthorizationServer } from './auth/discovery.js';
 import type { JWTVerifyGetKey } from 'jose';
@@ -202,6 +203,20 @@ export async function createApp(
   app.get('/healthz', (_req, res) => {
     res.json({ status: 'ok' });
   });
+
+  // Says what this address is to whoever opens it in a browser. Unauthenticated and outside
+  // the rate limiter, like /healthz, because it is a constant string — and held to the same
+  // rule about the version, which is why it names neither that nor the tool count.
+  if (config.http.landingPage) {
+    const page = landingPage({
+      ...(config.http.publicUrl ? { publicUrl: config.http.publicUrl } : {}),
+      endpointPath: MCP_ENDPOINT,
+      authMode: config.http.authMode,
+    });
+    app.get('/', (_req, res) => {
+      res.type('html').send(page);
+    });
+  }
 
   registerMetricsEndpoint(app, config, metrics);
 
