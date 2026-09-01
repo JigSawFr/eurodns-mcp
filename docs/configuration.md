@@ -360,6 +360,37 @@ EURODNS_OAUTH_SUBJECT_CLAIM=oid
 Unset by default, which tries `scope`, then `scp`, then `roles` — covering the common
 spellings, including both of Entra ID's. Set it to pin one claim exactly.
 
+### `EURODNS_OAUTH_ROLE_CLAIM`
+
+Unset by default, which takes the token's scopes as the whole test. Set it to the claim that
+names what the **person** was assigned, and a caller then needs both: the scope in the token
+_and_ the matching assignment. The effective permissions are the intersection.
+
+```bash
+EURODNS_OAUTH_ROLE_CLAIM=roles
+```
+
+Why two claims answer two questions: under an authorization server that grants scopes
+tenant-wide — Entra ID does — every token carries the same scopes, because the _client_
+requested them and an administrator consented once for everybody. That says nothing about who
+is holding it. An assignment does. A scope without an assignment is a client asking for
+something its user may not have; an assignment without a scope is a permission the client
+never asked for. Neither alone is the answer.
+
+Three consequences worth knowing before you set it:
+
+- **A token with no such claim at all grants nothing**, and the server writes one
+  `token grants nothing` line to stderr saying so. That is the fail-closed direction, and the
+  usual cause is a caller the identity provider left on default access.
+- **The `403` step-up stops being a step-up.** The scope gate still names the missing scope
+  in `WWW-Authenticate`, and a client will still go and ask for it — but consent is not what
+  is missing, so it will come back with the same token. Under this mode a `403` means _ask an
+  administrator_, not _ask again_.
+- **It is reversible in one variable.** Unset it and the previous behaviour returns exactly,
+  with the assignments left harmlessly in place.
+
+[The Entra ID guide](entra-id.md) has the click-path for declaring and assigning the roles.
+
 ### `EURODNS_OAUTH_SCOPE_PREFIX`
 
 Unset by default, which advertises scopes exactly as they are named — `eurodns.read` and the
