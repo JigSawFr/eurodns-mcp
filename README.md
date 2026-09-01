@@ -192,7 +192,8 @@ your identity provider will accept — with Microsoft Entra ID that means a doma
 your tenant**, because the server's public URL has to double as the Application ID URI. A
 platform hostname like `*.fly.dev` cannot be verified, so the domain is not optional there.
 [Entra ID](docs/entra-id.md) works the whole thing through, including the errors it produces
-when the three names involved fall out of step.
+when the three names involved fall out of step, and how to go one step further and give each
+person a _different_ set of scopes rather than the same one.
 
 Starting on `token` and moving to `oauth` later costs nothing but a restart: no data
 migration, no change to how tools behave.

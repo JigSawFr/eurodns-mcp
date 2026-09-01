@@ -105,6 +105,26 @@ export interface OAuthConfig {
   jwksUri?: string;
   subjectClaim: string;
   scopeClaim?: string;
+  /**
+   * The claim naming what the *person* is entitled to, when that is a different question
+   * from what the client asked for.
+   *
+   * Unset, the token's scopes are taken as granted and that is the whole test. Set, the
+   * effective permissions become the intersection of the scope claim and this one: the
+   * client must have requested the scope *and* the identity provider must have assigned it
+   * to the caller. See `effectiveScopes` in `auth/verifier.ts`.
+   */
+  roleClaim?: string;
+  /**
+   * A prefix the identity provider puts in front of our scope names inside `roleClaim`,
+   * stripped before comparing. `''` when there is none.
+   *
+   * Needed because Microsoft Entra ID keeps app roles and delegated scopes in **one**
+   * namespace per application: a role cannot be named `eurodns.read` while a scope of that
+   * name is already exposed. The prefix is how the two are told apart without giving up the
+   * correspondence between them.
+   */
+  rolePrefix: string;
   /** Signature algorithms a token may be signed with. Never empty. */
   algorithms: string[];
   /**
@@ -488,12 +508,39 @@ function loadHttpConfig(env: NodeJS.ProcessEnv, transport: 'stdio' | 'http'): Ht
       );
     }
 
+    const scopeClaim = (env.EURODNS_OAUTH_SCOPE_CLAIM || '').trim() || undefined;
+    const roleClaim = (env.EURODNS_OAUTH_ROLE_CLAIM || '').trim() || undefined;
+
+    const rolePrefix = (env.EURODNS_OAUTH_ROLE_PREFIX || '').trim();
+
+    // A prefix with nothing to apply it to does nothing at all, and reads as though
+    // per-person permissions are on when they are not. Say so rather than start.
+    if (rolePrefix !== '' && roleClaim === undefined) {
+      throw new ConfigError(
+        'EURODNS_OAUTH_ROLE_PREFIX is set but EURODNS_OAUTH_ROLE_CLAIM is not, so there is ' +
+          'no claim to strip it from. Set the claim as well, or unset the prefix.',
+      );
+    }
+
+    // Both pinned to the same claim is an intersection with itself: a silent no-op that
+    // grants everything, in the one deployment that configured this to grant less. It is a
+    // typo rather than a policy, so refuse it at startup instead of at every request.
+    if (roleClaim !== undefined && roleClaim === scopeClaim) {
+      throw new ConfigError(
+        `EURODNS_OAUTH_ROLE_CLAIM and EURODNS_OAUTH_SCOPE_CLAIM both name "${roleClaim}". ` +
+          'They have to be different claims — one carries what the client was granted, the ' +
+          'other what the caller was assigned — or the intersection means nothing.',
+      );
+    }
+
     config.oauth = {
       issuer,
       audience,
       jwksUri: (env.EURODNS_OAUTH_JWKS_URI || '').trim() || undefined,
       subjectClaim: (env.EURODNS_OAUTH_SUBJECT_CLAIM || 'sub').trim(),
-      scopeClaim: (env.EURODNS_OAUTH_SCOPE_CLAIM || '').trim() || undefined,
+      scopeClaim,
+      roleClaim,
+      rolePrefix,
       algorithms: algorithms.length > 0 ? algorithms : [...DEFAULT_JWT_ALGORITHMS],
       scopePrefix: normalizeScopePrefix(env.EURODNS_OAUTH_SCOPE_PREFIX),
     };

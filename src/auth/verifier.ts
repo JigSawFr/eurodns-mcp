@@ -28,9 +28,40 @@ function reportRejection(reason: string, expected?: Record<string, string>): voi
   );
 }
 
+/**
+ * Reports a token that verified but carries no entitlements at all.
+ *
+ * Deliberately not `reportRejection`: nothing was rejected. The signature is valid, the
+ * audience is right, and the caller will get a `403` from the scope gate rather than a
+ * `401`. Saying "rejected" would send the operator hunting through issuer and audience
+ * configuration for a problem that lives in the identity provider's assignments.
+ */
+function reportEmptyGrant(roleClaim: string): void {
+  process.stderr.write(
+    `${JSON.stringify({
+      level: 'warn',
+      message: 'token grants nothing',
+      reason: `no "${roleClaim}" claim, so no permission survives the intersection`,
+      expected: { roleClaim },
+    })}\n`,
+  );
+}
+
+/**
+ * The claims an authorization server might put permissions in, tried in order. `scope` is
+ * the RFC 9068 spelling; `scp` is Entra ID's delegated one; `roles` carries app-role
+ * assignments — which Entra emits for a *user* as readily as for an application, so this is
+ * a sensible last resort rather than an application-only case.
+ */
+const DEFAULT_SCOPE_CLAIMS = ['scope', 'scp', 'roles'];
+
 /** Reads scopes from whichever claim the authorization server uses. */
-export function scopesFrom(payload: JWTPayload, preferredClaim?: string): string[] {
-  const candidates = preferredClaim ? [preferredClaim] : ['scope', 'scp', 'roles'];
+export function scopesFrom(
+  payload: JWTPayload,
+  preferredClaim?: string,
+  candidateClaims: readonly string[] = DEFAULT_SCOPE_CLAIMS,
+): string[] {
+  const candidates = preferredClaim ? [preferredClaim] : candidateClaims;
 
   for (const claim of candidates) {
     const value = payload[claim];
@@ -38,6 +69,70 @@ export function scopesFrom(payload: JWTPayload, preferredClaim?: string): string
     if (Array.isArray(value)) return value.filter((s): s is string => typeof s === 'string');
   }
   return [];
+}
+
+/**
+ * What the caller may actually do — the scopes the rest of the server gates on.
+ *
+ * With no `roleClaim` configured this is `scopesFrom` and nothing more: whatever the token
+ * says it was granted is what it was granted.
+ *
+ * With one, the two claims answer two different questions and both must say yes. The scope
+ * claim carries what the *client* asked for and the authorization server agreed to issue —
+ * under Entra ID that is a tenant-wide grant, identical for everybody. The role claim
+ * carries what *this person* was assigned. Neither alone is the permission: a scope without
+ * an assignment is a client asking for something its user may not have, and an assignment
+ * without a scope is a permission the client never requested. The intersection is.
+ */
+export function effectiveScopes(payload: JWTPayload, config: OAuthConfig): string[] {
+  const roleClaim = config.roleClaim;
+  if (!roleClaim) return scopesFrom(payload, config.scopeClaim);
+
+  // The role claim is removed from the fallback list first. Without this, a token carrying
+  // `roles` but no `scp` would fall through to `roles` for *both* sides and intersect with
+  // itself — a no-op that grants everything, silently, in exactly the deployment that asked
+  // for the opposite. A test pins it.
+  const granted = scopesFrom(
+    payload,
+    config.scopeClaim,
+    DEFAULT_SCOPE_CLAIMS.filter((claim) => claim !== roleClaim),
+  );
+
+  if (payload[roleClaim] === undefined) {
+    // Fail closed, and say so once. A token with no assignments at all is a configuration
+    // symptom — roles never declared, or the caller left on the identity provider's default
+    // access — and without this line the operator sees a healthy server refusing every tool
+    // with nothing to go on. The claim's contents are never logged, only its absence.
+    reportEmptyGrant(roleClaim);
+    return [];
+  }
+
+  // Present but disjoint is not a misconfiguration, it is an authorization decision. No log.
+  const entitled = entitledScopes(scopesFrom(payload, roleClaim), config.rolePrefix);
+  return granted.filter((scope) => entitled.has(scope));
+}
+
+/**
+ * Turns the raw values of the role claim into the scope names this server gates on.
+ *
+ * With no prefix configured a role value *is* a scope name, which is what an authorization
+ * server that keeps roles and scopes apart allows.
+ *
+ * Microsoft Entra ID does not: app roles and delegated scopes share one namespace per
+ * application, so a role cannot be called `eurodns.read` while a scope of that name is
+ * already exposed — the portal answers "It contains duplicate value". The prefix is how a
+ * role is named distinctly and still says which scope it stands for. Values that do not
+ * carry it are dropped rather than kept: a directory hands out roles for its own purposes,
+ * and none of them are permissions here.
+ */
+function entitledScopes(values: string[], prefix: string): Set<string> {
+  if (prefix === '') return new Set(values);
+  return new Set(
+    values
+      .filter((value) => value.startsWith(prefix))
+      .map((value) => value.slice(prefix.length))
+      .filter((scope) => scope !== ''),
+  );
 }
 
 /**
@@ -86,7 +181,7 @@ export class JwtTokenVerifier implements OAuthTokenVerifier {
         typeof payload.client_id === 'string'
           ? payload.client_id
           : (payload.azp as string) || 'unknown',
-      scopes: scopesFrom(payload, this.config.scopeClaim),
+      scopes: effectiveScopes(payload, this.config),
       expiresAt: typeof payload.exp === 'number' ? payload.exp : undefined,
       extra: {
         mode: 'oauth',

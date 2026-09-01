@@ -2,7 +2,12 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { SignJWT, exportJWK, generateKeyPair, type JWK } from 'jose';
 import { createLocalJWKSet } from 'jose';
 import { ConfigError, loadConfig, type Config } from '../src/config.js';
-import { JwtTokenVerifier, StaticTokenVerifier, scopesFrom } from '../src/auth/verifier.js';
+import {
+  JwtTokenVerifier,
+  StaticTokenVerifier,
+  effectiveScopes,
+  scopesFrom,
+} from '../src/auth/verifier.js';
 import { discoveryCandidates } from '../src/auth/discovery.js';
 import { ALL_SCOPES, DEFAULT_JWT_ALGORITHMS, SCOPES } from '../src/constants.js';
 
@@ -37,7 +42,13 @@ async function mintToken(claims: Record<string, unknown> = {}, audience = AUDIEN
 }
 
 function verifier(
-  overrides: Partial<{ subjectClaim: string; scopeClaim: string; algorithms: string[] }> = {},
+  overrides: Partial<{
+    subjectClaim: string;
+    scopeClaim: string;
+    roleClaim: string;
+    rolePrefix: string;
+    algorithms: string[];
+  }> = {},
 ) {
   return new JwtTokenVerifier(
     {
@@ -46,11 +57,25 @@ function verifier(
       subjectClaim: 'sub',
       algorithms: [...DEFAULT_JWT_ALGORITHMS],
       scopePrefix: '',
+      rolePrefix: '',
       ...overrides,
     },
     'https://unused.example.com/jwks',
     localKeys(),
   );
+}
+
+/**
+ * Collects what the process writes to stderr, so a test can read the operational log the way
+ * whoever runs the server would.
+ */
+function captureStderr(): { lines: () => string[]; restore: () => void } {
+  const written: string[] = [];
+  const spy = vi.spyOn(process.stderr, 'write').mockImplementation((chunk: string | Uint8Array) => {
+    written.push(typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8'));
+    return true;
+  });
+  return { lines: () => written, restore: () => spy.mockRestore() };
 }
 
 describe('JWT verification', () => {
@@ -138,21 +163,6 @@ describe('JWT verification', () => {
 });
 
 describe('what a rejection tells the operator', () => {
-  /**
-   * Collects what the process writes to stderr, so a test can read the operational log the
-   * way whoever runs the server would.
-   */
-  function captureStderr(): { lines: () => string[]; restore: () => void } {
-    const written: string[] = [];
-    const spy = vi
-      .spyOn(process.stderr, 'write')
-      .mockImplementation((chunk: string | Uint8Array) => {
-        written.push(typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8'));
-        return true;
-      });
-    return { lines: () => written, restore: () => spy.mockRestore() };
-  }
-
   afterEach(() => vi.restoreAllMocks());
 
   it('names the claim that failed, and what was expected instead', async () => {
@@ -211,6 +221,125 @@ describe('what a rejection tells the operator', () => {
     expect(logged).not.toContain('user@example.com');
     expect(logged).not.toContain('test-client');
     expect(logged).not.toContain('x'.repeat(40));
+  });
+});
+
+describe('when the identity provider decides per person', () => {
+  const base = {
+    issuer: ISSUER,
+    audience: AUDIENCE,
+    subjectClaim: 'sub',
+    algorithms: [...DEFAULT_JWT_ALGORITHMS],
+    scopePrefix: '',
+    rolePrefix: '',
+  };
+
+  afterEach(() => vi.restoreAllMocks());
+
+  it("leaves the token's own scopes alone when no role claim is configured", () => {
+    // The regression guard. Every deployment that has not asked for this must be untouched.
+    expect(effectiveScopes({ scp: ['a', 'b'] }, base)).toEqual(['a', 'b']);
+    expect(effectiveScopes({ scp: ['a'], roles: ['b'] }, base)).toEqual(['a']);
+  });
+
+  it('grants only what the client asked for and the person was assigned', () => {
+    const config = { ...base, roleClaim: 'roles' };
+    // The client requests everything — under Entra ID consent is tenant-wide, so it always
+    // will. The assignment is what narrows it.
+    const payload = { scp: [...ALL_SCOPES], roles: [SCOPES.read, SCOPES.write] };
+    expect(effectiveScopes(payload, config)).toEqual([SCOPES.read, SCOPES.write]);
+  });
+
+  it('grants nothing for a scope the client never requested, however assigned', () => {
+    const config = { ...base, roleClaim: 'roles' };
+    const payload = { scp: [SCOPES.read], roles: [SCOPES.read, SCOPES.destructive] };
+    expect(effectiveScopes(payload, config)).toEqual([SCOPES.read]);
+  });
+
+  /**
+   * The trap this whole design walks past.
+   *
+   * `scopesFrom` falls back through `scope`, `scp`, `roles`. A token with `roles` but no
+   * `scp` would therefore read `roles` for *both* sides of the intersection and match itself
+   * — granting everything, in exactly the deployment that configured this to grant less.
+   * Removing the filter in `effectiveScopes` turns this test, and only this test, red.
+   */
+  it('never intersects the role claim with itself', () => {
+    const config = { ...base, roleClaim: 'roles' };
+    expect(effectiveScopes({ roles: [...ALL_SCOPES] }, config)).toEqual([]);
+  });
+
+  it('grants nothing, and says so once, when the token carries no roles at all', () => {
+    const capture = captureStderr();
+    const granted = effectiveScopes({ scp: [...ALL_SCOPES] }, { ...base, roleClaim: 'roles' });
+    capture.restore();
+
+    expect(granted).toEqual([]);
+    const entry = JSON.parse(capture.lines().join('').trim()) as {
+      level: string;
+      message: string;
+      expected: { roleClaim: string };
+    };
+    // Not "token rejected": the token verified. Calling it a rejection sends the operator
+    // looking at issuer and audience for a problem that lives in the assignments.
+    expect(entry.level).toBe('warn');
+    expect(entry.message).toBe('token grants nothing');
+    expect(entry.expected.roleClaim).toBe('roles');
+  });
+
+  it('stays quiet when the roles are present but simply do not match', () => {
+    const capture = captureStderr();
+    const granted = effectiveScopes(
+      { scp: [SCOPES.destructive], roles: [SCOPES.read] },
+      { ...base, roleClaim: 'roles' },
+    );
+    capture.restore();
+
+    // An authorization decision, not a misconfiguration. Logging it would bury the line
+    // above under noise from every under-privileged caller.
+    expect(granted).toEqual([]);
+    expect(capture.lines()).toEqual([]);
+  });
+
+  it('reads roles as a list or as a space-separated string', () => {
+    const config = { ...base, roleClaim: 'roles' };
+    const scp = [SCOPES.read, SCOPES.write];
+    expect(effectiveScopes({ scp, roles: [SCOPES.read] }, config)).toEqual([SCOPES.read]);
+    expect(effectiveScopes({ scp, roles: SCOPES.read }, config)).toEqual([SCOPES.read]);
+  });
+
+  /**
+   * Entra ID keeps app roles and delegated scopes in one namespace per application, so a
+   * role cannot be named `eurodns.read` while a scope of that name is exposed — the portal
+   * answers "It contains duplicate value". The prefix is how a role is named distinctly and
+   * still says which scope it stands for.
+   */
+  it('strips the prefix the identity provider forces onto role names', () => {
+    const config = { ...base, roleClaim: 'roles', rolePrefix: 'role.' };
+    const payload = {
+      scp: [...ALL_SCOPES],
+      roles: [`role.${SCOPES.read}`, `role.${SCOPES.write}`],
+    };
+    expect(effectiveScopes(payload, config)).toEqual([SCOPES.read, SCOPES.write]);
+  });
+
+  it('ignores role values that do not carry the prefix', () => {
+    // A directory hands out roles for its own purposes. None of them are permissions here,
+    // and an unprefixed value that happens to read like a scope must not become one.
+    const config = { ...base, roleClaim: 'roles', rolePrefix: 'role.' };
+    const payload = { scp: [...ALL_SCOPES], roles: [SCOPES.destructive, 'Directory.Reader'] };
+    expect(effectiveScopes(payload, config)).toEqual([]);
+  });
+
+  it('treats the prefix on its own as naming no scope', () => {
+    const config = { ...base, roleClaim: 'roles', rolePrefix: 'role.' };
+    expect(effectiveScopes({ scp: [...ALL_SCOPES], roles: ['role.'] }, config)).toEqual([]);
+  });
+
+  it('applies the intersection to a real token, end to end', async () => {
+    const token = await mintToken({ scope: undefined, scp: [...ALL_SCOPES], roles: [SCOPES.read] });
+    const info = await verifier({ roleClaim: 'roles' }).verifyAccessToken(token);
+    expect(info.scopes).toEqual([SCOPES.read]);
   });
 });
 

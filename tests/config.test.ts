@@ -116,6 +116,62 @@ describe('what the configuration refuses', () => {
     expect(withPrefix('  api://x  ')).toBe('api://x/');
   });
 
+  it('reads the role claim, and treats blank as unset', () => {
+    const withRoleClaim = (roleClaim?: string) =>
+      loadConfig(
+        {
+          ...base,
+          EURODNS_MCP_AUTH: 'oauth',
+          EURODNS_OAUTH_ISSUER: 'https://issuer.example',
+          EURODNS_OAUTH_AUDIENCE: 'api://x',
+          ...(roleClaim === undefined ? {} : { EURODNS_OAUTH_ROLE_CLAIM: roleClaim }),
+        },
+        'http',
+      ).http.oauth?.roleClaim;
+
+    // Unset must stay undefined rather than become an empty string: `effectiveScopes`
+    // branches on the value being falsy, and an empty claim name would read every token as
+    // carrying no assignments and grant nothing at all.
+    expect(withRoleClaim()).toBeUndefined();
+    expect(withRoleClaim('   ')).toBeUndefined();
+    expect(withRoleClaim('  roles  ')).toBe('roles');
+  });
+
+  it('refuses a role prefix with no role claim to strip it from', () => {
+    // Otherwise the prefix reads as though per-person permissions are on, and does nothing.
+    expect(() =>
+      loadConfig(
+        {
+          ...base,
+          EURODNS_MCP_AUTH: 'oauth',
+          EURODNS_OAUTH_ISSUER: 'https://issuer.example',
+          EURODNS_OAUTH_AUDIENCE: 'api://x',
+          EURODNS_OAUTH_ROLE_PREFIX: 'role.',
+        },
+        'http',
+      ),
+    ).toThrow(ConfigError);
+  });
+
+  it('refuses a role claim that is the scope claim, which would intersect nothing', () => {
+    // The failure this prevents is silent and points the wrong way: both sides read the same
+    // claim, every token intersects with itself, and the deployment that asked to grant less
+    // grants everything.
+    expect(() =>
+      loadConfig(
+        {
+          ...base,
+          EURODNS_MCP_AUTH: 'oauth',
+          EURODNS_OAUTH_ISSUER: 'https://issuer.example',
+          EURODNS_OAUTH_AUDIENCE: 'api://x',
+          EURODNS_OAUTH_SCOPE_CLAIM: 'roles',
+          EURODNS_OAUTH_ROLE_CLAIM: 'roles',
+        },
+        'http',
+      ),
+    ).toThrow(ConfigError);
+  });
+
   it('refuses an algorithm list that names nothing, rather than accepting everything', () => {
     expect(() =>
       loadConfig(

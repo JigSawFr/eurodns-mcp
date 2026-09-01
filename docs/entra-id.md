@@ -170,6 +170,11 @@ The consent type you chose for each scope — _Admins and users_ or _Admins only
 may **consent**, not who may **access** once admin consent has been granted. It is not a
 substitute for this step.
 
+This step answers _who may use it_. Everyone it lets in still gets **the same five scopes**,
+because admin consent grants them to the whole tenant. _What each of them may do_ is
+[per-person permissions with app roles](#narrowing-further-per-person-permissions-with-app-roles),
+below.
+
 ### 1d. Ask for v2 tokens
 
 **Manage → Manifest.** Set:
@@ -221,7 +226,126 @@ that is what Entra puts in `scp`. The asymmetry looks like a bug and is not; a t
 
 **Nothing else is needed.** `EURODNS_OAUTH_JWKS_URI` is discovered. `EURODNS_OAUTH_ALGORITHMS`
 defaults to the asymmetric set, and Entra signs `RS256`. `EURODNS_OAUTH_SCOPE_CLAIM` already
-tries `scp` (delegated) and `roles` (app-only), which is both of Entra's spellings.
+tries `scp` and then `roles`, which is both of Entra's spellings.
+
+If you want each person to have a _different_ set of permissions rather than the same one,
+that is the next section — and it needs one more variable.
+
+---
+
+## Narrowing further: per-person permissions with app roles
+
+Optional, and the only way to give two people different permissions on this server.
+
+Everything up to here has been all-or-nothing: step 1c decides who gets in, and everyone who
+does gets the same five scopes. That is not a limitation of this server — it is what a
+delegated scope _is_ under Entra. Admin consent is tenant-wide, the client requests all five,
+and the token says so for everybody.
+
+**App roles are the per-person half.** They are assigned to named users or groups, and Entra
+puts them in a `roles` claim — in a delegated token as readily as an application one, despite
+how often they are described as application-only.
+
+The server can then require **both**: the scope in the token _and_ the matching assignment.
+The scope says what the client asked for; the role says what this person is entitled to. A
+scope without an assignment is a client asking for something its user may not have, and an
+assignment without a scope is a permission the client never requested. Only the intersection
+is a permission.
+
+### A. Declare the five roles
+
+**App registrations → `eurodns-mcp` → Manage → App roles → Create app role.** Five times.
+Every field on that form is required, `Description` included.
+
+> **A role may not be called `eurodns.read`.** An application keeps its app roles and its
+> delegated scopes in **one** namespace, and step 1a already exposed a scope by that name.
+> Reusing it fails on Save with _"It contains duplicate value. Please provide unique value."_
+> The `role.` prefix below is what keeps the two apart while still saying which scope each
+> role stands for; the server is told to strip it.
+
+| Display name | Description                                                                           | Allowed member types | Value                      |
+| ------------ | ------------------------------------------------------------------------------------- | -------------------- | -------------------------- |
+| Read         | Read anything: domains, DNS zones, subscriptions, invoices                            | **Users/Groups**     | `role.eurodns.read`        |
+| DNS write    | Create, change and delete records in a DNS zone                                       | **Users/Groups**     | `role.eurodns.dns.write`   |
+| Destructive  | Irreversible operations outside zone data — deleting profiles, revoking a certificate | **Users/Groups**     | `role.eurodns.destructive` |
+| Billing      | Operations that create a charge or extend a paid term                                 | **Users/Groups**     | `role.eurodns.billing`     |
+| Audit        | Read the audit log: who called what, and when                                         | **Users/Groups**     | `role.eurodns.audit`       |
+
+- **`Value` must be the prefix followed by exactly the scope name.** It is what lands in the
+  token; the server strips `role.` and compares what is left, literally, against the same
+  five strings it compares `scp` against. A capital letter or a hyphen where a dot belongs,
+  and the role grants nothing. Dots are accepted; the space character is not, and the portal
+  refuses an invalid value as you type it.
+- `role.` is not magic — any prefix works, as long as it is the one you configure below.
+- **Allowed member types: Users/Groups**, not _Applications_. _Applications_ declares an
+  application permission for the client-credentials flow, which is a different thing entirely
+  and will not appear in a signed-in user's token.
+- _Do you want to enable this app role?_ → **Yes**.
+
+`Display name` and `Description` are read by people, not by the server — they are what an
+administrator sees in the role picker when assigning somebody. They are also the only place
+that says what a role actually permits, so the person doing the assigning is relying on them.
+No need to repeat the product name in every one: the list already sits inside this app.
+
+### B. Assign the people
+
+**Enterprise applications** — the service principal again, not the app registration —
+**→ `eurodns-mcp` → Users and groups → Add user/group.** Pick the user, then **Select a
+role**, then Assign.
+
+- **One role per assignment.** To give somebody two, repeat _Add user/group_ with the same
+  user and the other role. Entra allows any number of assignments per person.
+- **Assigning a group rather than a user requires an Entra ID P1 or P2 licence.** Check yours
+  before designing the model around groups. **Nested groups are not supported** either — only
+  direct membership grants the role.
+- Anyone still on **Default Access** — assigned to the app in step 1c but to no role — gets a
+  valid token with no `roles` claim, and therefore no tools at all. That is the intended
+  direction of failure, and the server says so in its log rather than leaving you guessing.
+
+A workable starting split: `eurodns.read` to everyone who needs the server,
+`eurodns.dns.write` to whoever edits zones, and `eurodns.destructive`, `eurodns.billing` and
+`eurodns.audit` to one or two named people.
+
+### C. Turn it on
+
+One line, added to the six in step 2:
+
+```bash
+EURODNS_OAUTH_ROLE_CLAIM=roles
+EURODNS_OAUTH_ROLE_PREFIX=role.
+```
+
+The prefix has to match the one on the role values exactly, and it is stripped before the
+comparison. A role value that does not carry it is ignored rather than trusted — a directory
+hands out roles for its own purposes, and none of them are permissions here.
+
+Unset `EURODNS_OAUTH_ROLE_CLAIM` and nothing changes — the assignments sit there harmlessly
+and the token's scopes remain the whole test. That is also how you back out.
+
+### What this changes about failure
+
+**A `403` stops being a step-up.** The scope gate still answers `insufficient_scope` and
+still names the scope in `WWW-Authenticate`, because that is what the specification requires.
+A client will still take that name back to Entra and ask for consent — and Entra will grant
+it, because consent was never what was missing. The token comes back with the same `roles`
+claim and the same `403` follows. Under this mode, a `403` means _ask an administrator for
+the role_, not _ask again_.
+
+**Everything refused, with a token that looks fine**, is the other new failure. The log names
+it directly:
+
+```json
+{
+  "level": "warn",
+  "message": "token grants nothing",
+  "reason": "no \"roles\" claim, so no permission survives the intersection",
+  "expected": { "roleClaim": "roles" }
+}
+```
+
+Three causes, in the order worth checking: the roles were declared but nobody was assigned;
+the caller is on Default Access; or a `Value` does not match `EURODNS_OAUTH_ROLE_PREFIX`
+followed by its scope, character for character.
 
 ---
 
@@ -280,12 +404,13 @@ secret:
 echo "$TOKEN" | cut -d. -f2 | base64 -d 2>/dev/null | python3 -m json.tool
 ```
 
-| Claim            | Should be                                                                                            |
-| ---------------- | ---------------------------------------------------------------------------------------------------- |
-| `iss`            | `https://login.microsoftonline.com/<TENANT_GUID>/v2.0` — `sts.windows.net` means step 1d was skipped |
-| `aud`            | the bare `<APP_ID>` GUID                                                                             |
-| `ver`            | `2.0`                                                                                                |
-| `scp` or `roles` | the **bare** scope names, e.g. `eurodns.read` — not the qualified form                               |
+| Claim   | Should be                                                                                            |
+| ------- | ---------------------------------------------------------------------------------------------------- |
+| `iss`   | `https://login.microsoftonline.com/<TENANT_GUID>/v2.0` — `sts.windows.net` means step 1d was skipped |
+| `aud`   | the bare `<APP_ID>` GUID                                                                             |
+| `ver`   | `2.0`                                                                                                |
+| `scp`   | the **bare** scope names, e.g. `eurodns.read` — not the qualified form                               |
+| `roles` | present only with app roles assigned; the same bare names, and the per-person half of the answer     |
 
 That last row is worth seeing for yourself. The client _requests_
 `https://mcp.example.com/mcp/eurodns.read`; the token carries `eurodns.read`. That is the
@@ -330,22 +455,23 @@ ID, so:
 lands in depends on where in the exchange it happened, and looking in only one is how people
 conclude, wrongly, that nothing was logged.
 
-| Code                                     | Cause                                                                                                                                              |
-| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `AADSTS9010010`                          | `resource` does not match the scopes' prefix. Application ID URI, `EURODNS_MCP_PUBLIC_URL` and `EURODNS_OAUTH_SCOPE_PREFIX` are not all one string |
-| `AADSTS500011`                           | No app in the tenant carries that Application ID URI — step 1a was not applied, or was applied to another app                                      |
-| `AADSTS700016`                           | The `client_id` sent does not exist in the tenant. Usually the client fell back to a hosted identity; set your own Client ID                       |
-| `AADSTS70011`                            | A bare scope name where Entra wants the qualified form — `EURODNS_OAUTH_SCOPE_PREFIX` unset or wrong                                               |
-| `AADSTS50011`                            | Redirect URI not registered, or registered under the wrong platform                                                                                |
-| `AADSTS7000215`                          | Wrong client secret                                                                                                                                |
-| `AADSTS65001`                            | Admin consent not granted — or granted before the Application ID URI changed, which invalidates it                                                 |
-| `AADSTS50105`                            | The user is not assigned to the enterprise application. This is step 1c working as intended; assign them, or leave them out on purpose             |
-| `invalid_client` on the device code flow | Confidential client; that flow needs _Allow public client flows_                                                                                   |
-| `401`, token looks fine                  | v1 token: step 1d. Check `ver`, `iss` and `aud` together                                                                                           |
-| `401` right after a working one          | The token expired. Entra's default is about an hour                                                                                                |
-| `403`, _"requires the eurodns.x scope"_  | The scope was not requested, or consent was not granted for it. Check `scp`                                                                        |
-| `403` on every call, tokens fine         | Not OAuth at all — the **EuroDNS API** filters by source IP. Allowlist the host's egress address                                                   |
-| `406` from `curl`                        | Missing `Accept: application/json, text/event-stream`. See [Protocol](protocol.md)                                                                 |
+| Code                                                     | Cause                                                                                                                                                                                         |
+| -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AADSTS9010010`                                          | `resource` does not match the scopes' prefix. Application ID URI, `EURODNS_MCP_PUBLIC_URL` and `EURODNS_OAUTH_SCOPE_PREFIX` are not all one string                                            |
+| `AADSTS500011`                                           | No app in the tenant carries that Application ID URI — step 1a was not applied, or was applied to another app                                                                                 |
+| `AADSTS700016`                                           | The `client_id` sent does not exist in the tenant. Usually the client fell back to a hosted identity; set your own Client ID                                                                  |
+| `AADSTS70011`                                            | A bare scope name where Entra wants the qualified form — `EURODNS_OAUTH_SCOPE_PREFIX` unset or wrong                                                                                          |
+| `AADSTS50011`                                            | Redirect URI not registered, or registered under the wrong platform                                                                                                                           |
+| `AADSTS7000215`                                          | Wrong client secret                                                                                                                                                                           |
+| `AADSTS65001`                                            | Admin consent not granted — or granted before the Application ID URI changed, which invalidates it                                                                                            |
+| `AADSTS50105`                                            | The user is not assigned to the enterprise application. This is step 1c working as intended; assign them, or leave them out on purpose                                                        |
+| `invalid_client` on the device code flow                 | Confidential client; that flow needs _Allow public client flows_                                                                                                                              |
+| `401`, token looks fine                                  | v1 token: step 1d. Check `ver`, `iss` and `aud` together                                                                                                                                      |
+| `401` right after a working one                          | The token expired. Entra's default is about an hour                                                                                                                                           |
+| `403`, _"requires the eurodns.x scope"_                  | The scope was not requested, or consent was not granted for it. Check `scp`                                                                                                                   |
+| `403` on every tool, with `EURODNS_OAUTH_ROLE_CLAIM` set | No `roles` claim in the token. Roles declared but nobody assigned, the caller on Default Access, or a role `Value` that does not match its scope exactly. The log says `token grants nothing` |
+| `403` on every call, tokens fine                         | Not OAuth at all — the **EuroDNS API** filters by source IP. Allowlist the host's egress address                                                                                              |
+| `406` from `curl`                                        | Missing `Accept: application/json, text/event-stream`. See [Protocol](protocol.md)                                                                                                            |
 
 Startup failures are separate and say so on stderr — _"declares issuer … which does not
 match"_ means `common`, or a domain name, in `EURODNS_OAUTH_ISSUER`. Use the GUID.
