@@ -185,7 +185,9 @@ attribution: the audit log records a label, so it can tell you a destructive cal
 not who made it.
 
 **`oauth`** gives each person their own credential, lets the five scopes decide who may do
-what, and puts a real identity in the audit log. Its entry price is a hostname on a domain
+what, and puts a real identity in the audit log. The scopes decide what a caller may do; your
+identity provider decides who gets a token at all, and most default to everyone in the
+directory — so that setting is part of the configuration, not an afterthought. Its entry price is a hostname on a domain
 your identity provider will accept — with Microsoft Entra ID that means a domain **verified in
 your tenant**, because the server's public URL has to double as the Application ID URI. A
 platform hostname like `*.fly.dev` cannot be verified, so the domain is not optional there.

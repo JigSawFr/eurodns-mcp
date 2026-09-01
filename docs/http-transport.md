@@ -26,6 +26,13 @@ The server is an OAuth **resource server**. It does not issue tokens and embeds 
 provider: point it at any authorization server that publishes RFC 8414 or OpenID Connect
 discovery metadata.
 
+That division of labour has a consequence worth stating plainly. This server checks that a
+token is genuine, issued for it, and carries the scope the call needs — and then trusts the
+authorization server on **who** is holding it. It keeps no list of permitted users. So
+whoever your authorization server will issue a token to can reach this server, and
+restricting that set is a job only it can do. Most products default to "anyone in the
+directory"; see [Entra ID](entra-id.md) for what that switch is called there.
+
 ```bash
 EURODNS_MCP_AUTH=oauth \
 EURODNS_OAUTH_ISSUER=https://issuer.example.com \

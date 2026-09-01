@@ -14,6 +14,12 @@ identity instead of a shared label.
 **The server holds no OAuth secret.** It only validates tokens. The client secret created
 below lives in the client, never here.
 
+**The server does not decide who may use it.** It checks that a token is genuine, issued for
+it, and carries the right scope — then trusts the identity provider on the question of who is
+holding it. That is the correct division of labour, and it has one consequence worth reading
+twice: **anyone your tenant issues a token to can reach this server.** Step 1c is where you
+narrow that, and skipping it leaves your DNS reachable by every account in the tenant.
+
 ---
 
 ## Before you start: the one prerequisite that decides everything
@@ -127,10 +133,44 @@ consent granted against the old names, so re-grant it every time.**
 **Manage → API permissions → Add a permission → My APIs → `eurodns-mcp`** → select the five
 scopes → **Grant admin consent**.
 
+> **Admin consent is tenant-wide.** It does not grant the scopes to you, or to the people you
+> have in mind: it grants them to **every user in the tenant**. On its own, this step makes
+> the server reachable by anyone who can sign in. Step 1c is what narrows that, and it is not
+> optional.
+
 Optionally, back under _Expose an API → Add a client application_, pre-authorise `<APP_ID>`.
 That suppresses the per-user consent prompt.
 
-### 1c. Ask for v2 tokens
+### 1c. Decide who may use it
+
+**This is the step that decides who can reach your DNS.** Do it before anyone connects.
+
+The server does not keep a list of permitted users, by design: it validates the issuer, the
+audience, the signature and the scopes, and reads the subject only to write it into the audit
+log. Deciding _who_ is the identity provider's job. So if Entra issues a token, this server
+will honour it.
+
+Entra's default is to issue one to any user in the tenant. To change that:
+
+> **Enterprise applications** — not App registrations — **→ `eurodns-mcp` → Properties →
+> Assignment required? → Yes → Save**
+
+Then **Users and groups → Add user/group**, and assign the people or the group who should
+have access. Everyone else now gets `AADSTS50105` instead of a token.
+
+Two things about this switch:
+
+- **It lives on the enterprise application**, the service principal, not on the app
+  registration you have been editing. Same name, different blade — which is most of why it
+  gets missed.
+- **Tokens already issued stay valid** until they expire, about an hour by default. To cut
+  someone off immediately, revoke their sessions from their user profile as well.
+
+The consent type you chose for each scope — _Admins and users_ or _Admins only_ — governs who
+may **consent**, not who may **access** once admin consent has been granted. It is not a
+substitute for this step.
+
+### 1d. Ask for v2 tokens
 
 **Manage → Manifest.** Set:
 
@@ -167,7 +207,7 @@ and will never match. A domain name resolves, but Entra answers with the GUID fo
 
 **The audience is the bare GUID**, and it stays the bare GUID even though the Application ID
 URI is now a URL. A v2 access token carries the resource's client ID in `aud` whatever its
-identifier URI. (This is the other half of why step 1c matters.)
+identifier URI. (This is the other half of why step 1d matters.)
 
 **`oid`, not the default `sub`.** Entra's `sub` is a _pairwise pseudonymous identifier_ —
 different for the same person in a different application, and meaningless to a human reading
@@ -242,7 +282,7 @@ echo "$TOKEN" | cut -d. -f2 | base64 -d 2>/dev/null | python3 -m json.tool
 
 | Claim            | Should be                                                                                            |
 | ---------------- | ---------------------------------------------------------------------------------------------------- |
-| `iss`            | `https://login.microsoftonline.com/<TENANT_GUID>/v2.0` — `sts.windows.net` means step 1c was skipped |
+| `iss`            | `https://login.microsoftonline.com/<TENANT_GUID>/v2.0` — `sts.windows.net` means step 1d was skipped |
 | `aud`            | the bare `<APP_ID>` GUID                                                                             |
 | `ver`            | `2.0`                                                                                                |
 | `scp` or `roles` | the **bare** scope names, e.g. `eurodns.read` — not the qualified form                               |
@@ -299,8 +339,9 @@ conclude, wrongly, that nothing was logged.
 | `AADSTS50011`                            | Redirect URI not registered, or registered under the wrong platform                                                                                |
 | `AADSTS7000215`                          | Wrong client secret                                                                                                                                |
 | `AADSTS65001`                            | Admin consent not granted — or granted before the Application ID URI changed, which invalidates it                                                 |
+| `AADSTS50105`                            | The user is not assigned to the enterprise application. This is step 1c working as intended; assign them, or leave them out on purpose             |
 | `invalid_client` on the device code flow | Confidential client; that flow needs _Allow public client flows_                                                                                   |
-| `401`, token looks fine                  | v1 token: step 1c. Check `ver`, `iss` and `aud` together                                                                                           |
+| `401`, token looks fine                  | v1 token: step 1d. Check `ver`, `iss` and `aud` together                                                                                           |
 | `401` right after a working one          | The token expired. Entra's default is about an hour                                                                                                |
 | `403`, _"requires the eurodns.x scope"_  | The scope was not requested, or consent was not granted for it. Check `scp`                                                                        |
 | `403` on every call, tokens fine         | Not OAuth at all — the **EuroDNS API** filters by source IP. Allowlist the host's egress address                                                   |
