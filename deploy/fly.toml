@@ -1,22 +1,64 @@
-# fly.toml app configuration file generated for eurodns-mcp on 2026-08-31T13:12:00Z
+# Fly.io deployment.
 #
-# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+# Fly builds from the working directory it is invoked in, and finds the Dockerfile there. A
+# config kept under deploy/ therefore has to be pointed at explicitly — `fly deploy -c
+# deploy/fly.toml` from the repository root — or moved to the root, where `fly deploy` picks
+# it up on its own.
 #
+# Fly is the recommended host for one reason: the EuroDNS API filters by source IP, and a
+# dedicated egress IPv4 costs a couple of dollars a month here against roughly $100
+# elsewhere. See deploy/README.md for allocating it.
+#
+# ---------------------------------------------------------------------------------------
+# Fly.io Launch regenerates this file and deletes every comment in it, including the ones
+# below that record why a value is what it is — and it dropped `initial_size` along with
+# them once already. Its pull request is a proposal, not a patch to merge as-is: take the
+# keys it adds, keep the prose. The `pr-title` check will refuse the bot's non-conventional
+# title, which is the signal to read the diff rather than to override the check.
+# ---------------------------------------------------------------------------------------
 
 app = 'eurodns-mcp'
+
+# Any region works; pick one close to the clients. This one matches the app currently
+# deployed from this file — changing it here does not move a machine that already exists.
+#
+# It is also the region a static egress IP has to be allocated in: a Machine can only use an
+# egress address allocated in its own region, so a second region needs a second address.
 primary_region = 'ams'
 
+# Written by Fly.io Launch. Empty is what it emits, and it costs nothing to keep — the file
+# stays byte-comparable with what the tool expects, so the next run has less to "fix".
 [build]
 
 [env]
-  EURODNS_AUDIT_DESTINATION = 'file'
-  EURODNS_AUDIT_FILE = '/data/audit.jsonl'
   HOST = '0.0.0.0'
   PORT = '3000'
+  EURODNS_AUDIT_DESTINATION = 'file'
+  EURODNS_AUDIT_FILE = '/data/audit.jsonl'
 
+# A Fly volume attaches to one machine, so this deployment is single-instance. Scaling out
+# means giving up the file-based audit log for a collector — and with it the history query
+# tool, which can only read a file.
+#
+# Double brackets: TOML reads `[[mounts]]` as an array of tables, which is what Fly expects
+# and what a second volume would need. A single `[mounts]` works for one mount and fails to
+# parse the moment another is added.
 [[mounts]]
+  # Named for the mount point rather than the app: launching from the Fly dashboard creates
+  # the volume from `destination`, ignoring `source`, and the name it chose is the one the
+  # running machine is attached to. A different name here would create a second, empty
+  # volume on the next deploy and mount that one instead — losing sight of the existing log
+  # without reporting an error.
   source = 'data'
   destination = '/data'
+  # Creates the volume on the first launch, so a deployment started from the Fly dashboard —
+  # which has no field for one — does not fail on a mount whose volume does not exist. Only
+  # `fly launch` and `fly deploy` read it; `fly volumes create` ignores it, so allocating the
+  # volume by hand still works and still wins.
+  #
+  # 1 GB is sized for the audit log, which rotates at EURODNS_AUDIT_MAX_BYTES (64 MB) and
+  # keeps two generations.
+  initial_size = '1gb'
 
 [http_service]
   internal_port = 3000
