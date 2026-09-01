@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.7.0](https://github.com/JigSawFr/eurodns-mcp/compare/v0.6.0...v0.7.0) (2026-09-01)
+
+
+### Features
+
+* **auth:** require both the scope and the assignment, when configured ([#54](https://github.com/JigSawFr/eurodns-mcp/issues/54)) ([535fba1](https://github.com/JigSawFr/eurodns-mcp/commit/535fba1728a6314e825d556ac24555d32dcdf1ee))
+
+
+### Documentation
+
+* **entra-id:** say that admin consent opens the server to the whole tenant ([#52](https://github.com/JigSawFr/eurodns-mcp/issues/52)) ([0744640](https://github.com/JigSawFr/eurodns-mcp/commit/074464085d33878115bae7517db9f2506a83d710))
+
 ## [0.6.0](https://github.com/JigSawFr/eurodns-mcp/compare/v0.5.0...v0.6.0) (2026-09-01)
 
 
