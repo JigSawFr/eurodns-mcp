@@ -11,6 +11,8 @@ import type { ToolContext } from './tools/context.js';
 import type { MetricsRegistry } from './metrics.js';
 import { TOOL_LIST_CACHE_MS, UNKNOWN_VERSION } from './constants.js';
 import { buildInstructions, hiddenClasses } from './instructions.js';
+import { registerPrompts } from './prompts.js';
+import { registerResources } from './resources.js';
 
 export const SERVER_NAME = 'eurodns-mcp-server';
 
@@ -115,13 +117,16 @@ export interface BuiltServer {
   server: McpServer;
   context: ToolContext;
   toolCount: number;
+  /** Two of the four are conditional, on the same guardrails that hide tools. */
+  promptCount: number;
+  resourceCount: number;
 }
 
 export function buildServer(options: BuildOptions): BuiltServer {
   const server = new McpServer(
     { name: SERVER_NAME, version: SERVER_VERSION },
     {
-      capabilities: { tools: {} },
+      capabilities: { tools: {}, prompts: {}, resources: {} },
       // The only documentation a model ever reads. Config-derived, so it names this
       // deployment's character limit and the classes it hides rather than the defaults.
       instructions: buildInstructions(options.config),
@@ -134,6 +139,10 @@ export function buildServer(options: BuildOptions): BuiltServer {
       cacheHints: {
         'tools/list': { ttlMs: TOOL_LIST_CACHE_MS, cacheScope: 'public' },
         'server/discover': { ttlMs: TOOL_LIST_CACHE_MS, cacheScope: 'public' },
+        // The prompt and resource lists are decided by the same guardrails at construction,
+        // so the argument above applies to them unchanged.
+        'prompts/list': { ttlMs: TOOL_LIST_CACHE_MS, cacheScope: 'public' },
+        'resources/list': { ttlMs: TOOL_LIST_CACHE_MS, cacheScope: 'public' },
       },
     },
   );
@@ -150,6 +159,14 @@ export function buildServer(options: BuildOptions): BuiltServer {
   const generated = registerGeneratedTools(server, context);
   const dns = registerDnsTools(server, context);
   const audit = registerAuditTools(server, context);
+  const prompts = registerPrompts(server, context);
+  const resources = registerResources(server, context);
 
-  return { server, context, toolCount: generated + dns + audit };
+  return {
+    server,
+    context,
+    toolCount: generated + dns + audit,
+    promptCount: prompts,
+    resourceCount: resources,
+  };
 }

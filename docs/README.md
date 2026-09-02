@@ -7,7 +7,7 @@ it.
 
 | Page                              | What it covers                                                             |
 | --------------------------------- | -------------------------------------------------------------------------- |
-| [Tools](tools.md)                 | The 82 tools, how they are named, and the three DNS workflow tools         |
+| [Tools](tools.md)                 | The 82 tools, the four prompts, and the deployment resource                |
 | [Guardrails](guardrails.md)       | Risk classes, what a deployment can forbid, and confirmation before a call |
 | [Configuration](configuration.md) | Every environment variable, with its default                               |
 

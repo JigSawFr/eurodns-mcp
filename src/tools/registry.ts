@@ -217,7 +217,7 @@ function errorResult(message: string) {
  * only ever answer "this is disabled" misdescribes the deployment and spends the model's
  * attempts teaching it what the list already could have said.
  */
-function isAdvertised(risk: RiskClass, guardrails: GuardrailConfig): boolean {
+export function isAdvertised(risk: RiskClass, guardrails: GuardrailConfig): boolean {
   if (risk === 'read') return true;
   if (guardrails.readOnly) return false;
   if (risk === 'billing') return guardrails.allowBilling;
