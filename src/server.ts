@@ -7,9 +7,11 @@ import { EuroDnsClient, type FetchLike } from './services/client.js';
 import { registerAuditTools } from './tools/audit.js';
 import { registerDnsTools } from './tools/dns.js';
 import { registerGeneratedTools } from './tools/registry.js';
+import { registerPortfolioTools } from './tools/portfolio.js';
 import type { ToolContext } from './tools/context.js';
 import type { MetricsRegistry } from './metrics.js';
-import { TOOL_LIST_CACHE_MS, UNKNOWN_VERSION } from './constants.js';
+import { PortfolioCache } from './services/portfolio.js';
+import { PORTFOLIO_MAX_ENTRIES, TOOL_LIST_CACHE_MS, UNKNOWN_VERSION } from './constants.js';
 import { buildInstructions, hiddenClasses } from './instructions.js';
 import { registerPrompts } from './prompts.js';
 import { registerResources } from './resources.js';
@@ -70,6 +72,12 @@ export interface BuildOptions {
    * stream destination — where there is no file to resume from — means no chain at all.
    */
   audit?: AuditLogger;
+  /**
+   * Process-wide domain-name cache, for the same reason as the two above: a per-request
+   * server on the HTTP transport would rebuild an empty one on every call, so the cache
+   * would never age into existence.
+   */
+  portfolio?: PortfolioCache;
 }
 
 /** Identity used when the transport carries no token of its own. */
@@ -154,18 +162,25 @@ export function buildServer(options: BuildOptions): BuiltServer {
     fallbackActor: fallbackActor(options),
     requireScopes: options.transport === 'http' && options.config.http.authMode === 'oauth',
     sessionful: options.transport === 'stdio',
+    portfolio:
+      options.portfolio ??
+      new PortfolioCache({
+        ttlMs: options.config.upstream.portfolioTtlMs,
+        maxEntries: PORTFOLIO_MAX_ENTRIES,
+      }),
   };
 
   const generated = registerGeneratedTools(server, context);
   const dns = registerDnsTools(server, context);
   const audit = registerAuditTools(server, context);
+  const portfolio = registerPortfolioTools(server, context);
   const prompts = registerPrompts(server, context);
   const resources = registerResources(server, context);
 
   return {
     server,
     context,
-    toolCount: generated + dns + audit,
+    toolCount: generated + dns + audit + portfolio,
     promptCount: prompts,
     resourceCount: resources,
   };

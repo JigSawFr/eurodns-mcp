@@ -14,9 +14,10 @@ import { createMcpHandler } from '@modelcontextprotocol/server';
 import { toNodeHandler } from '@modelcontextprotocol/node';
 import { ConfigError, loadConfig, type Config } from './config.js';
 import { OnePasswordError, resolveEnvSecrets } from './secrets/index.js';
-import { ALL_SCOPES } from './constants.js';
+import { ALL_SCOPES, PORTFOLIO_MAX_ENTRIES } from './constants.js';
 import { SERVER_NAME, SERVER_VERSION, buildServer, startupLine } from './server.js';
 import { MetricsRegistry } from './metrics.js';
+import { PortfolioCache } from './services/portfolio.js';
 import { AuditLogger } from './audit.js';
 import { installShutdown } from './shutdown.js';
 import { toolScopeIndex } from './tools/registry.js';
@@ -171,6 +172,13 @@ export async function createApp(
   // outlive it. A logger per request would restart the chain on every call.
   const metrics = options.metrics ?? new MetricsRegistry();
   const audit = options.audit ?? new AuditLogger(config.audit, Date.now, metrics);
+  // Third thing that has to outlive the per-request server: the domain list backing
+  // completion. Owned here, it is a cache; owned by the server below, it would be a fresh
+  // empty object on every request and would never reach its TTL.
+  const portfolio = new PortfolioCache({
+    ttlMs: config.upstream.portfolioTtlMs,
+    maxEntries: PORTFOLIO_MAX_ENTRIES,
+  });
 
   // One factory, both protocol eras. `legacy: 'stateless'` is the default and is what keeps
   // 2025-era clients — which is still most of them — working against the same endpoint while
@@ -185,6 +193,7 @@ export async function createApp(
           transport: 'http',
           metrics,
           audit,
+          portfolio,
           ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
         }).server,
       { legacy: 'stateless' },

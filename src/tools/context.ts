@@ -1,6 +1,7 @@
 import type { AuditLogger, AuditActor } from '../audit.js';
 import type { Config } from '../config.js';
 import type { EuroDnsClient } from '../services/client.js';
+import type { PortfolioCache } from '../services/portfolio.js';
 
 /** Everything a tool handler needs, assembled once at server construction. */
 export interface ToolContext {
@@ -27,6 +28,14 @@ export interface ToolContext {
    * a floor rather than the whole test: see `canConfirm` in the registry.
    */
   sessionful: boolean;
+  /**
+   * The account's domain names, held for completion.
+   *
+   * Process-wide rather than per-server, for the reason `metrics` and `audit` are: the HTTP
+   * transport builds a fresh server per request, so a cache owned by one would never live
+   * long enough to be a cache.
+   */
+  portfolio: PortfolioCache;
 }
 
 /** Identity and permissions for one tool call, derived from the request's auth info. */

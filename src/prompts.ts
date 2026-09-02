@@ -1,4 +1,5 @@
 import type { McpServer } from '@modelcontextprotocol/server';
+import { completable } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import { TTL_VALUES } from './constants.js';
 import { auditQueryAvailable } from './tools/audit.js';
@@ -21,6 +22,18 @@ export function registerPrompts(server: McpServer, context: ToolContext): number
   const { guardrails } = context.config;
   let registered = 0;
 
+  /**
+   * A domain-name argument that suggests the account's own domains as it is typed.
+   *
+   * MCP completes prompt arguments and resource-template variables — never tool arguments —
+   * so this and the `eurodns://domain/{domainName}` template are the whole reach of the
+   * portfolio cache. The cache is what makes it affordable: see `PortfolioCache`.
+   */
+  const domainArgument = (description: string) =>
+    completable(z.string().describe(description), (value) =>
+      context.portfolio.complete(context.client, value),
+    );
+
   server.registerPrompt(
     'eurodns_zone_review',
     {
@@ -29,7 +42,7 @@ export function registerPrompts(server: McpServer, context: ToolContext): number
         'Read a zone and report what looks wrong: missing mail authentication, dangling ' +
         'CNAMEs, inconsistent nameservers, TTLs that will hurt during a migration.',
       argsSchema: z.object({
-        domainName: z.string().describe('The zone to review, e.g. example.com.'),
+        domainName: domainArgument('The zone to review, e.g. example.com.'),
       }),
     },
     ({ domainName }) =>
@@ -105,7 +118,7 @@ export function registerPrompts(server: McpServer, context: ToolContext): number
           'Publish the _acme-challenge TXT record a certificate authority asked for, at a ' +
           'TTL short enough that a mistake is cheap to correct.',
         argsSchema: z.object({
-          domainName: z.string().describe('The domain being validated, e.g. example.com.'),
+          domainName: domainArgument('The domain being validated, e.g. example.com.'),
           token: z.string().describe('The exact token value the ACME client printed.'),
         }),
       },

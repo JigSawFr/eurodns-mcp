@@ -176,6 +176,24 @@ export const DEFAULT_RATE_LIMIT_WINDOW_MS = 60_000;
 export const TOOL_LIST_CACHE_MS = 5 * 60_000;
 
 /**
+ * How long the account's domain list is held for completion.
+ *
+ * Ten minutes trades a small staleness window against a full portfolio search per keystroke.
+ * A domain registered elsewhere shows up on the next expiry, or immediately through
+ * `eurodns_portfolio_refresh`; nothing here decides what a tool call may act on, so a stale
+ * suggestion costs a correction rather than a wrong operation.
+ */
+export const DEFAULT_PORTFOLIO_TTL_MS = 10 * 60_000;
+
+/**
+ * Ceiling on names held for completion, whatever the account contains.
+ *
+ * A completion list is read by a person picking from a menu; past a few thousand entries it
+ * has stopped being one, and the memory is being spent on something nobody scrolls through.
+ */
+export const PORTFOLIO_MAX_ENTRIES = 5_000;
+
+/**
  * Reported when the package version cannot be read.
  *
  * Deliberately not a plausible number. Falling back to a credible-looking version would

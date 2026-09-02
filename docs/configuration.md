@@ -72,6 +72,27 @@ JSON has no such limit and truncation is pure loss for it; set this to whatever 
 can actually handle. The trade is real either way — see
 [`eurodns_domain_search`](tools.md) and its `size: -1`.
 
+### `EURODNS_PORTFOLIO_TTL_MS`
+
+Default `600000` (ten minutes). How long the account's domain list is held to answer
+completion — the suggestions offered as a domain name is typed into a prompt argument or the
+`eurodns://domain/{domainName}` resource template. Positive integer, in milliseconds.
+
+The list comes from one full portfolio search. Without a cache, every keystroke would be one
+of those against an API that filters by source IP and rate-limits, so the feature would cost
+more than it is worth. Concurrent lookups share a single upstream call rather than starting
+one each, which is what bounds the cost — a TTL alone would not, since an empty cache under
+concurrent load would stampede.
+
+Nothing here decides what a tool call may act on, so a stale suggestion costs a correction
+rather than a wrong operation. Lower it if domains are registered often enough that waiting
+is annoying; `eurodns_portfolio_refresh` re-reads it immediately when someone has just
+registered or transferred a name and wants it to appear now.
+
+```bash
+EURODNS_PORTFOLIO_TTL_MS=60000    # one minute, for an account that changes often
+```
+
 ## Guardrails
 
 These decide what the deployment permits **at all**, before any question of who is calling.
