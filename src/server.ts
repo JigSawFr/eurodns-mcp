@@ -10,6 +10,7 @@ import { registerGeneratedTools } from './tools/registry.js';
 import type { ToolContext } from './tools/context.js';
 import type { MetricsRegistry } from './metrics.js';
 import { TOOL_LIST_CACHE_MS, UNKNOWN_VERSION } from './constants.js';
+import { buildInstructions, hiddenClasses } from './instructions.js';
 
 export const SERVER_NAME = 'eurodns-mcp-server';
 
@@ -88,22 +89,6 @@ function fallbackActor(options: BuildOptions): AuditActor {
 }
 
 /**
- * Names the risk classes a deployment is hiding, for the startup line.
- *
- * Hiding is the honest surface, but it costs discoverability: a disabled tool no longer
- * answers with the variable that would enable it, it simply is not there. Saying so once at
- * startup is what the operator gets instead.
- */
-export function hiddenClasses(config: Config): string[] {
-  const { readOnly, allowBilling, allowDestructive } = config.guardrails;
-  if (readOnly) return ['everything that changes state (EURODNS_READ_ONLY)'];
-  const hidden: string[] = [];
-  if (!allowBilling) hidden.push('billing (EURODNS_ALLOW_BILLING)');
-  if (!allowDestructive) hidden.push('irreversible (EURODNS_ALLOW_DESTRUCTIVE)');
-  return hidden;
-}
-
-/**
  * The line each entry point writes to stderr when it comes up.
  *
  * Built here rather than in the two entry points because it is the operator's only summary
@@ -137,6 +122,9 @@ export function buildServer(options: BuildOptions): BuiltServer {
     { name: SERVER_NAME, version: SERVER_VERSION },
     {
       capabilities: { tools: {} },
+      // The only documentation a model ever reads. Config-derived, so it names this
+      // deployment's character limit and the classes it hides rather than the defaults.
+      instructions: buildInstructions(options.config),
       // The tool surface is generated from a document vendored in the image: it is identical
       // for every caller and changes only when a new image ships. Without a hint the SDK
       // emits `ttlMs: 0`, so a stateless deployment rebuilds and serialises 80-odd tools on

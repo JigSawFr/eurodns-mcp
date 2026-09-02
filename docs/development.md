@@ -16,8 +16,10 @@ Tests run against a real MCP client over an in-memory transport, with the HTTP l
 through the real Express app. No test touches the network.
 
 [CONTRIBUTING.md](../CONTRIBUTING.md) covers the conventions that are load bearing rather than
-decorative — what CI enforces and why, and the one rule that will bite you first. Everyone
-taking part is expected to follow the [code of conduct](../CODE_OF_CONDUCT.md).
+decorative — what CI enforces and why, and the one rule that will bite you first.
+[AGENTS.md](../AGENTS.md) states the same rules for a coding agent, and adds the map of the
+tree. Everyone taking part is expected to follow the
+[code of conduct](../CODE_OF_CONDUCT.md).
 
 ### Releasing
 
