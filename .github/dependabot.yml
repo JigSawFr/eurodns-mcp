@@ -12,6 +12,17 @@ updates:
     commit-message:
       prefix: 'chore(deps)'
 
+  # The Dockerfile pins its base image by digest, for the same reason the actions above are
+  # pinned by commit. A digest never updates on its own either — including for the security
+  # fixes a slim Node image gets between tags — so it needs the same other half. This is the
+  # link that actually executes the code in production, and it was the only one unwatched.
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: 'chore(deps)'
+
   - package-ecosystem: npm
     directory: /
     schedule:

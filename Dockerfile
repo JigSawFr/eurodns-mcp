@@ -3,7 +3,11 @@
 # The image serves the HTTP transport. stdio is for clients that spawn the process
 # themselves, which is precisely what a container does not do.
 
-FROM node:24-slim AS build
+# Pinned by digest, like every action in .github/workflows/. The tag stays in the line so a
+# reader can see which release this is; the digest is what actually gets pulled, so a tag
+# repointed under us is a visible change rather than a silent one. Dependabot moves the two
+# together — see .github/dependabot.yml.
+FROM node:24-slim@sha256:ba849c60be29959425b8734d57b8b4b7d56f98edd9504c9af091d5281095a71e AS build
 WORKDIR /app
 
 # --ignore-scripts matters here: the `prepare` script builds the project, and it would run
@@ -17,7 +21,7 @@ COPY scripts ./scripts
 COPY src ./src
 RUN npm run build
 
-FROM node:24-slim AS runtime
+FROM node:24-slim@sha256:ba849c60be29959425b8734d57b8b4b7d56f98edd9504c9af091d5281095a71e AS runtime
 
 LABEL org.opencontainers.image.source="https://github.com/JigSawFr/eurodns-mcp"
 LABEL org.opencontainers.image.description="Model Context Protocol server for the EuroDNS User API"

@@ -1,0 +1,5 @@
+# Review on every pull request routes here by default, and on a public repository this is
+# also the answer to "who maintains this". One line rather than per-directory rules: the
+# project has one maintainer, and a map that pretends otherwise would be fiction.
+
+* @JigSawFr

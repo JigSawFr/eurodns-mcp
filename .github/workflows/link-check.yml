@@ -1,0 +1,100 @@
+name: Link check
+
+# Eighteen markdown files link to each other, to GitHub, and to a dozen third parties. Rot is
+# a silent event in exactly the same way an OpenAPI drift is: nothing breaks, a reader simply
+# lands on a 404 and concludes the project is unmaintained. This notices.
+#
+# Deliberately not part of the pull-request CI, for the reason spec-drift.yml gives: a check
+# that depends on third parties being reachable would make unrelated pull requests
+# intermittently red, which is how a signal stops being read.
+
+on:
+  schedule:
+    # Tuesday morning, a day after the OpenAPI check, so two network jobs never contend.
+    - cron: '41 5 * * 2'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - id: lychee
+        name: Resolve every link in the markdown
+        uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
+        with:
+          # `fail: false` hands the verdict back rather than failing here, so the step below
+          # can tell "links are broken" apart from "the run itself went wrong".
+          fail: false
+          output: lychee-report.md
+          jobSummary: true
+          args: >-
+            --no-progress
+            --exclude-path node_modules
+            --max-retries 3
+            --accept 200,206,429
+            --
+            '**/*.md'
+        env:
+          # Without this, every link to this repository answers 404 while it is private and
+          # the report would be a wall of false positives on its first run. It also lifts the
+          # anonymous rate limit once the repository is public.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # 0 = everything resolved. 1 = links are broken, which is the report worth having.
+      # Anything else is our own failure — a missing binary, an unusable token, no network —
+      # and must be loud rather than filed as an issue blaming a third party.
+      - name: Separate broken links from a broken run
+        run: |
+          case "${{ steps.lychee.outputs.exit_code }}" in
+            0) echo "Every link resolved." ;;
+            1) echo "Broken links found; the next step reports them." ;;
+            *) echo "::error::lychee exited ${{ steps.lychee.outputs.exit_code }} — this is a failure of the check itself, not a broken link."
+               exit 1 ;;
+          esac
+
+      - name: Open an issue naming what rotted
+        if: steps.lychee.outputs.exit_code == 1
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        with:
+          script: |
+            const fs = require('fs');
+            // The report can be long. An issue body is capped, and nobody reads past the
+            // first screen anyway — the run's job summary carries the full list.
+            const full = fs.readFileSync('lychee-report.md', 'utf8');
+            const report = full.length > 40000
+              ? `${full.slice(0, 40000)}\n\n…truncated. The full report is in the job summary.`
+              : full;
+
+            const body = [
+              'Links in this repository no longer resolve.',
+              '',
+              report,
+              '',
+              'A link that 404s is read as an unmaintained project, which is why this runs at',
+              'all. Fix the target or drop the link; if a host simply refuses automated',
+              'requests, exclude it in `.github/workflows/link-check.yml` rather than leaving',
+              'a permanent false positive.',
+            ].join('\n');
+
+            const open = await github.rest.issues.listForRepo({
+              owner: context.repo.owner, repo: context.repo.repo,
+              state: 'open', labels: 'link-rot',
+            });
+            // One issue per wave, not one per Tuesday: a report that reappears every week is
+            // a report that stops being read. Same rule as spec-drift.yml.
+            if (open.data.length > 0) {
+              core.info(`Issue #${open.data[0].number} is already open; leaving it alone.`);
+              return;
+            }
+            await github.rest.issues.create({
+              owner: context.repo.owner, repo: context.repo.repo,
+              title: 'Links no longer resolve', body, labels: ['link-rot'],
+            });
