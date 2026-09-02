@@ -22,6 +22,23 @@ updates:
       interval: weekly
     commit-message:
       prefix: 'chore(deps)'
+    ignore:
+      # The image runs the *active* LTS while the `engines` floor sits on the maintenance
+      # line — the split PR #19 chose deliberately. Node 26 becomes LTS on 2026-10-28, and 24
+      # holds that role until 2026-10-20; until then a bump would put production on a Current
+      # release. The CI matrix is also 22 and 24 only, so the image would run a version
+      # nothing tests. Lift this at the end of October, in the same change that widens the
+      # matrix.
+      #
+      # Expressed as a version range rather than `update-types: [version-update:semver-major]`
+      # on purpose. The reference defines update-types purely in SemVer levels and says
+      # nothing about where a digest refresh falls, so ignoring majors *might* also silence
+      # the digest updates this ecosystem exists for. A range cannot: a refreshed digest on
+      # 24-slim resolves to a version that is not >= 26.
+      #
+      # Bundler syntax, not npm — that is what Dependabot specifies for Docker.
+      - dependency-name: node
+        versions: ['>= 26']
 
   - package-ecosystem: npm
     directory: /
@@ -30,6 +47,15 @@ updates:
     commit-message:
       prefix: 'chore(deps)'
       prefix-development: 'chore(deps-dev)'
+    ignore:
+      # Not a refusal of majors — the bound is @typescript-eslint's. Its peer range is
+      # `>=4.8.4 <6.1.0`, so TypeScript 6.0 would still install; 6.1 and above fails `npm ci`
+      # with ERESOLVE before a single test runs, and takes the whole grouped dev update down
+      # with it. Lift this when typescript-eslint widens its peer range: TypeScript 7 is the
+      # native compiler and will be worth the move.
+      - dependency-name: typescript
+        versions: ['>=6.1']
+
     groups:
       # Four production dependencies against a dozen development ones. Grouping the latter
       # keeps the review surface to what actually ships.
