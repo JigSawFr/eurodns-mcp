@@ -26,7 +26,19 @@ tree. Everyone taking part is expected to follow the
 Releases are cut by [release-please](https://github.com/googleapis/release-please) from
 [Conventional Commit](https://www.conventionalcommits.org) subjects. It keeps a release pull
 request open, accumulating `CHANGELOG.md`; merging it tags the version, publishes a GitHub
-Release, and that Release triggers the image build.
+Release, and then **calls** the image and npm workflows.
+
+Calls them, rather than letting them listen for `release: published`. That trigger is the
+obvious choice and cannot work: release-please creates the Release with the default
+`GITHUB_TOKEN`, and GitHub starts no workflow run from an event that token raised. The v0.2.0
+release shipped with no image for exactly that reason.
+
+The npm publish authenticates over OIDC — there is no `NPM_TOKEN` anywhere — and npm attaches
+a provenance attestation on its own, which is why the job needs `id-token: write` and nothing
+else. Provenance requires this repository to stay public. `server.json` carries the version
+twice for the MCP registry, and release-please keeps both in step through `extra-files`;
+`tests/manifest.test.ts` fails if they ever drift, because the registry's own answer when they
+disagree is "validation failed" without naming the field.
 
 Only the **subject line** follows the convention — commit bodies stay prose. `feat:` bumps
 the minor, `fix:` the patch, and a `!` or `BREAKING CHANGE:` bumps the minor too while the

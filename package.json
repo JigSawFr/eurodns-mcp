@@ -1,5 +1,5 @@
 {
-  "name": "eurodns-mcp-server",
+  "name": "@jigsawfr/eurodns-mcp",
   "version": "0.7.1",
   "description": "Model Context Protocol server for the EuroDNS User API — domains, DNS zones, subscriptions and SSL.",
   "keywords": [
@@ -19,6 +19,7 @@
     "url": "https://github.com/JigSawFr/eurodns-mcp/issues"
   },
   "homepage": "https://github.com/JigSawFr/eurodns-mcp#readme",
+  "mcpName": "io.github.JigSawFr/eurodns-mcp",
   "type": "module",
   "engines": {
     "node": ">=22"
@@ -34,6 +35,9 @@
     "README.md",
     "LICENSE"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "gen": "tsx scripts/gen-operations.ts",
     "prepare": "npm run build",

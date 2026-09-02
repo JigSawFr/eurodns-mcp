@@ -1,23 +1,36 @@
 name: Publish to npm
 
-# Prepared, deliberately not automatic.
+# Called by release-please.yml once it has cut a release, and runnable by hand for a tag that
+# was missed. Nothing here needs a secret: trusted publishing authenticates over OIDC, and the
+# npm CLI then attaches a provenance attestation on its own — which is why `id-token: write`
+# below is what makes this work rather than a stored token.
 #
-# The package is not on npm yet, so this runs only when started by hand. To make releases
-# publish automatically, add the release trigger back:
+# It deliberately does NOT trigger on `release: published`, for the reason release-image.yml
+# gives and this project has already paid for once: release-please creates the Release with the
+# default GITHUB_TOKEN, and GitHub starts no workflow run from an event that token raised. The
+# release for v0.2.0 published with no image because of exactly that.
 #
-#   on:
-#     release:
-#       types: [published]
-#
-# Two things have to be in place first: the name `eurodns-mcp-server` claimed on npmjs, and
-# a trusted publisher configured there pointing at this repository and this workflow file.
-#
-# There is no NPM_TOKEN. Trusted publishing authenticates over OIDC, and the npm CLI then
-# attaches a provenance attestation on its own — which is why `id-token: write` below is
-# what makes this work rather than a stored secret.
+# Two things have to be in place on npmjs.com before this can succeed, and neither can be done
+# from here: the package must exist (trusted publishing cannot perform a first publish — npm
+# will not let you configure OIDC on a package that is not there yet), and a trusted publisher
+# must point at this repository and this workflow file. Provenance additionally requires the
+# source repository to be public.
 
 on:
+  workflow_call:
+    inputs:
+      tag:
+        description: Git tag to publish, for example v0.8.0.
+        required: true
+        type: string
   workflow_dispatch:
+    inputs:
+      tag:
+        description: >-
+          Git tag to publish, for example v0.8.0. npm refuses a version that already exists,
+          so re-dispatching a published tag fails rather than overwriting anything.
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -27,16 +40,24 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
+      # The tag, not the branch. Without this the job would publish whatever main happens to
+      # hold, which is not what the version number would claim.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.tag }}
+
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '24'
           registry-url: 'https://registry.npmjs.org'
           cache: npm
 
-      # Trusted publishing needs a recent CLI; the one bundled with Node may predate it.
+      # Trusted publishing needs npm 11.5.1 or newer; the one bundled with Node may predate it.
       - run: npm install -g npm@latest
 
       - run: npm ci
       - run: npm test
+
+      # No `--provenance`: publishing through a trusted publisher generates the attestation
+      # without being asked, and passing the flag is not how it is turned on.
       - run: npm publish
