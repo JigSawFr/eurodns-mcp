@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.8.0](https://github.com/JigSawFr/eurodns-mcp/compare/v0.7.1...v0.8.0) (2026-09-02)
+
+
+### Features
+
+* complete a domain name from the account, without a call per keystroke ([#71](https://github.com/JigSawFr/eurodns-mcp/issues/71)) ([1624787](https://github.com/JigSawFr/eurodns-mcp/commit/1624787ad8e4c09b1e0209650049c36878e509fc))
+* name the workflows worth naming, and say what the deployment allows ([#70](https://github.com/JigSawFr/eurodns-mcp/issues/70)) ([dce62c3](https://github.com/JigSawFr/eurodns-mcp/commit/dce62c303ff4f3f0904f88a6694ec2e4e27e1f34))
+* open the clients that require a search/fetch pair, behind a switch ([#72](https://github.com/JigSawFr/eurodns-mcp/issues/72)) ([da953db](https://github.com/JigSawFr/eurodns-mcp/commit/da953dbd645f12edf8dadadf19cf356c52388340))
+* tell the model what it needs before it breaks something ([#68](https://github.com/JigSawFr/eurodns-mcp/issues/68)) ([0e58d5c](https://github.com/JigSawFr/eurodns-mcp/commit/0e58d5c91720cde381eec6fa27762432653437cc))
+
 ## [0.7.1](https://github.com/JigSawFr/eurodns-mcp/compare/v0.7.0...v0.7.1) (2026-09-02)
 
 
