@@ -24,21 +24,28 @@ updates:
       prefix: 'chore(deps)'
     ignore:
       # The image runs the *active* LTS while the `engines` floor sits on the maintenance
-      # line — the split PR #19 chose deliberately. Node 26 becomes LTS on 2026-10-28, and 24
-      # holds that role until 2026-10-20; until then a bump would put production on a Current
-      # release. The CI matrix is also 22 and 24 only, so the image would run a version
-      # nothing tests. Lift this at the end of October, in the same change that widens the
-      # matrix.
+      # line — the split PR #19 chose deliberately. So: nothing above the major we deliberately
+      # run, whatever its number.
+      #
+      # The bound is the running major rather than "the next LTS" because Node's odd majors
+      # are never LTS at all and die within about eight months. A rule written against 26
+      # let 25 straight through, and 25 reached end of life on 2026-06-01 — a bump onto a
+      # release that gets no security patches, which CI cannot see: the docker job built that
+      # image perfectly happily.
+      #
+      # Lift this at the end of October 2026, when 26 becomes LTS and 24 enters maintenance,
+      # in the same change that widens the CI matrix — which is 22 and 24 today, so anything
+      # newer would also be a version nothing tests.
       #
       # Expressed as a version range rather than `update-types: [version-update:semver-major]`
       # on purpose. The reference defines update-types purely in SemVer levels and says
       # nothing about where a digest refresh falls, so ignoring majors *might* also silence
       # the digest updates this ecosystem exists for. A range cannot: a refreshed digest on
-      # 24-slim resolves to a version that is not >= 26.
+      # 24-slim resolves to a version that is not > 24.
       #
       # Bundler syntax, not npm — that is what Dependabot specifies for Docker.
       - dependency-name: node
-        versions: ['>= 26']
+        versions: ['> 24']
 
   - package-ecosystem: npm
     directory: /
