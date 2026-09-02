@@ -24,6 +24,14 @@ it against the published one and opens an issue when they diverge. Taking a vend
 means regenerating and reading the `src/generated/` diff, because a renamed operation is a
 renamed tool and that is a breaking change for anyone's prompts.
 
+## Two checks that never run on your pull request
+
+`spec-drift.yml` and `link-check.yml` are scheduled weekly, not attached to pull requests, and
+that is on purpose: both depend on third parties being reachable, so running them per pull
+request would turn unrelated work red at random — which is how a signal stops being read. Each
+opens **one** issue per finding rather than one per week, and you can trigger either by hand
+from the Actions tab.
+
 ## Commit messages and pull request titles
 
 Releases are cut by [release-please](https://github.com/googleapis/release-please), which
