@@ -93,6 +93,23 @@ registered or transferred a name and wants it to appear now.
 EURODNS_PORTFOLIO_TTL_MS=60000    # one minute, for an account that changes often
 ```
 
+### `EURODNS_COMPAT_TOOLS`
+
+Default off. Registers two extra read-only tools named exactly `search` and `fetch`, which
+some clients — ChatGPT's connector, company-knowledge and deep-research paths — require before
+they will install a server at all. ChatGPT's developer mode needs none of this.
+
+Off by default because of the names, not the behaviour: these are the only two tools here
+without the `eurodns_` prefix that keeps every other name from colliding in a client with
+several servers connected. The contract is the bare names, so the collision cannot be designed
+away — only accepted deliberately. Both are reads over operations already exposed as
+`eurodns_domain_search` and `eurodns_domain_get`; they add reach, not capability. See
+[Protocol](protocol.md).
+
+```bash
+EURODNS_COMPAT_TOOLS=true
+```
+
 ## Guardrails
 
 These decide what the deployment permits **at all**, before any question of who is calling.

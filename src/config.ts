@@ -176,9 +176,22 @@ export interface HttpConfig {
   oauth?: OAuthConfig;
 }
 
+/**
+ * Interoperability shims that are off unless a deployment asks for them.
+ *
+ * Separate from the guardrails on purpose: a guardrail decides what this server is *allowed*
+ * to do, where this decides what shape it presents. Conflating the two would put a
+ * compatibility switch in the same table as the one that stops a caller spending money.
+ */
+export interface CompatConfig {
+  /** The unprefixed `search` and `fetch` pair some clients require before they will install. */
+  searchFetch: boolean;
+}
+
 export interface Config {
   upstream: UpstreamConfig;
   guardrails: GuardrailConfig;
+  compat: CompatConfig;
   audit: AuditConfig;
   http: HttpConfig;
 }
@@ -262,10 +275,14 @@ export function loadConfig(
     ),
   };
 
+  const compat: CompatConfig = {
+    searchFetch: parseOrThrow(booleanFromEnv, env.EURODNS_COMPAT_TOOLS, 'EURODNS_COMPAT_TOOLS'),
+  };
+
   const audit = loadAuditConfig(env, transport);
   const http = loadHttpConfig(env, transport);
 
-  return { upstream, guardrails, audit, http };
+  return { upstream, guardrails, compat, audit, http };
 }
 
 function loadAuditConfig(env: NodeJS.ProcessEnv, transport: 'stdio' | 'http'): AuditConfig {

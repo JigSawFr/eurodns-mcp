@@ -8,6 +8,7 @@ import { registerAuditTools } from './tools/audit.js';
 import { registerDnsTools } from './tools/dns.js';
 import { registerGeneratedTools } from './tools/registry.js';
 import { registerPortfolioTools } from './tools/portfolio.js';
+import { registerCompatTools } from './tools/compat.js';
 import type { ToolContext } from './tools/context.js';
 import type { MetricsRegistry } from './metrics.js';
 import { PortfolioCache } from './services/portfolio.js';
@@ -174,13 +175,14 @@ export function buildServer(options: BuildOptions): BuiltServer {
   const dns = registerDnsTools(server, context);
   const audit = registerAuditTools(server, context);
   const portfolio = registerPortfolioTools(server, context);
+  const compat = registerCompatTools(server, context);
   const prompts = registerPrompts(server, context);
   const resources = registerResources(server, context);
 
   return {
     server,
     context,
-    toolCount: generated + dns + audit + portfolio,
+    toolCount: generated + dns + audit + portfolio + compat,
     promptCount: prompts,
     resourceCount: resources,
   };

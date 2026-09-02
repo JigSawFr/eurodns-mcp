@@ -19,14 +19,15 @@ export default defineConfig({
       // why. What is not a move is deleting a test to make the ratio work, or nudging the
       // floor down as a reflex — at that point the number stops meaning anything.
       thresholds: {
-        statements: 92.25,
+        statements: 92.7,
         // Branches sit below the rest because three `??` fallbacks in server.ts guard a
         // `createRequire` that only fails in a layout this package does not produce. Up
-        // 1.10 from 85.11 across the role-intersection, result-rendering, handshake-
-        // instructions, prompts and portfolio-cache commits, whose every branch is covered.
-        branches: 86.21,
-        functions: 92.96,
-        lines: 93.22,
+        // 1.59 from 85.11 across the role-intersection, result-rendering, handshake-
+        // instructions, prompts, portfolio-cache and compatibility commits, whose every
+        // branch is covered.
+        branches: 86.7,
+        functions: 93.25,
+        lines: 93.66,
       },
     },
   },

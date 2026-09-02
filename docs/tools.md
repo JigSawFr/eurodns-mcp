@@ -24,7 +24,9 @@ and, when enabled, the history query.
 
 Every tool name is prefixed with `eurodns_` so it cannot collide with another server's, and
 carries `readOnlyHint`, `destructiveHint` and `idempotentHint` annotations derived from what
-the operation actually does.
+the operation actually does. The one exception is deliberate and opt-in: `EURODNS_COMPAT_TOOLS`
+adds an unprefixed `search`/`fetch` pair for clients that require those exact names — see
+[Protocol](protocol.md).
 
 ## What the model is told before it starts
 

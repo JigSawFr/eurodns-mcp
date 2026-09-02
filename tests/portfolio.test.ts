@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { PortfolioCache } from '../src/services/portfolio.js';
 import { EuroDnsClient } from '../src/services/client.js';
+import { loadConfig } from '../src/config.js';
 import { connect, isError, stubFetch, testConfig } from './harness.js';
 import { DOMAIN_RESOURCE_TEMPLATE } from '../src/resources.js';
 
@@ -286,6 +287,35 @@ describe('refreshing the cache on demand', () => {
       const second = await client.callTool({ name: 'eurodns_portfolio_refresh', arguments: {} });
       expect(second.structuredContent).toHaveProperty('replacedAgeSeconds');
       expect((second.structuredContent as { domains: number }).domains).toBe(1);
+    } finally {
+      await close();
+    }
+  });
+
+  /**
+   * The tool checks the guardrail itself, although the HTTP scope gate refuses this before
+   * dispatch — the same two-gate arrangement the DNS tools use, for the same reason.
+   */
+  it('refuses a caller whose grant is empty, before reaching the API', async () => {
+    const { fetchImpl, requests } = stubFetch(() => ({ body: [] }));
+    const config = loadConfig(
+      {
+        EURODNS_APP_ID: 'test-app-id',
+        EURODNS_API_KEY: 'test-api-key',
+        EURODNS_AUDIT_DESTINATION: 'none',
+        EURODNS_MCP_AUTH: 'oauth',
+        EURODNS_OAUTH_ISSUER: 'https://issuer.example.com',
+        EURODNS_MCP_PUBLIC_URL: 'https://mcp.example.com/mcp',
+      } as NodeJS.ProcessEnv,
+      'http',
+    );
+    const { client, close } = await connect({ config, transport: 'http', fetchImpl });
+    try {
+      const result = await client.callTool({ name: 'eurodns_portfolio_refresh', arguments: {} });
+
+      expect(isError(result)).toBe(true);
+      // Stubbed to succeed, so an empty request list means it was refused, not that it failed.
+      expect(requests).toHaveLength(0);
     } finally {
       await close();
     }
