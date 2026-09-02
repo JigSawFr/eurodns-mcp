@@ -29,13 +29,33 @@ The table below is limited to what could be verified. Where a cell says _check t
 own docs_, treat that as "not established here" rather than "unsupported" — this table is
 deliberately not a guess.
 
-| Harness                                                       | How it reaches this server           | What to configure                                                                                        | Known catch                                                                                                                                                      |
-| ------------------------------------------------------------- | ------------------------------------ | -------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Claude Code**                                               | Streamable HTTP, direct              | `claude mcp add --transport http … --header "Authorization: Bearer …"`                                   | None. A static token works, which makes this the quickest remote client to try.                                                                                  |
-| **Claude Desktop**                                            | Custom connector, or stdio           | Connector expects OAuth — Authorization URL, Token URL, Client ID, Client Secret under Advanced settings | **No field for a static bearer token.** Either run `EURODNS_MCP_AUTH=oauth`, or bridge with `mcp-remote` (below).                                                |
-| **ChatGPT** (connectors / developer mode)                     | Remote HTTPS, SSE or streamable HTTP | OAuth, or none                                                                                           | **Connector install requires the server to expose `search` and `fetch` tools.** This server exposes neither, so it will not install as a connector as it stands. |
-| **Any stdio client** — Cursor, VS Code, Windsurf, Zed, Cline… | Spawns the process, stdio            | `command` + `args` + `env`, as in the project README                                                     | None. stdio is the universal path and needs no authentication: the trust boundary is the OS account.                                                             |
-| Anything else, remote                                         | Streamable HTTP                      | `EURODNS_MCP_AUTH=token` and an `Authorization` header, or OAuth                                         | Check the client's own docs for whether it can send a static header.                                                                                             |
+| Harness                                                       | How it reaches this server           | What to configure                                                                                        | Known catch                                                                                                                                                                                  |
+| ------------------------------------------------------------- | ------------------------------------ | -------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Claude Code**                                               | Streamable HTTP, direct              | `claude mcp add --transport http … --header "Authorization: Bearer …"`                                   | None. A static token works, which makes this the quickest remote client to try.                                                                                                              |
+| **Claude Desktop**                                            | Custom connector, or stdio           | Connector expects OAuth — Authorization URL, Token URL, Client ID, Client Secret under Advanced settings | **No field for a static bearer token.** Either run `EURODNS_MCP_AUTH=oauth`, or bridge with `mcp-remote` (below).                                                                            |
+| **ChatGPT** (connectors / developer mode)                     | Remote HTTPS, SSE or streamable HTTP | OAuth, or none                                                                                           | **Developer mode takes arbitrary tools and needs nothing extra.** The connector, company-knowledge and deep-research paths require a `search`/`fetch` pair: set `EURODNS_COMPAT_TOOLS=true`. |
+| **Any stdio client** — Cursor, VS Code, Windsurf, Zed, Cline… | Spawns the process, stdio            | `command` + `args` + `env`, as in the project README                                                     | None. stdio is the universal path and needs no authentication: the trust boundary is the OS account.                                                                                         |
+| Anything else, remote                                         | Streamable HTTP                      | `EURODNS_MCP_AUTH=token` and an `Authorization` header, or OAuth                                         | Check the client's own docs for whether it can send a static header.                                                                                                                         |
+
+### The `search` / `fetch` pair
+
+ChatGPT's connector, company-knowledge and deep-research paths look for two tools named
+exactly `search` and `fetch`, with a fixed shape, and refuse the install without them. Its
+**developer mode** takes arbitrary tools and needs none of this — so the pair opens one class
+of client, not the client, which is worth knowing before turning it on.
+
+`EURODNS_COMPAT_TOOLS=true` registers them. Both are reads over operations already exposed as
+`eurodns_domain_search` and `eurodns_domain_get`: `search(query)` returns one result per
+matching domain as `{ id, title, text }`, and `fetch(id)` returns that domain's full registry
+record. The id is the domain name itself — unique in the account, already the key the upstream
+read uses, and meaningful in a citation.
+
+**It is off by default because of the names.** Every other tool here is prefixed `eurodns_`
+so it cannot collide with another server's in a client that has several connected. These two
+cannot be: the contract is the bare names. Turning the switch on accepts that `search` and
+`fetch` may mean two things at once to a shared client — a reasonable trade to make
+deliberately, and a bad one to inherit from an upgrade. A test pins the default surface so it
+can only ever happen on purpose.
 
 ### The stdio bridge
 

@@ -84,12 +84,21 @@ export async function connect(
       // Elicitation content is primitives only, which is what the protocol allows.
       content?: Record<string, string | number | boolean | string[]>;
     };
+    /**
+     * Builds the server as the HTTP transport would.
+     *
+     * The in-memory pair carries no bearer token, so under an OAuth config this is how a
+     * caller with an *empty* grant reaches a handler — the one path on which a read is
+     * refused at the guardrail rather than waved through.
+     */
+    transport?: 'stdio' | 'http';
   } = {},
 ) {
   const config = options.config ?? testConfig();
+  const transport = options.transport ?? 'stdio';
   const { server, toolCount } = buildServer({
     config,
-    transport: 'stdio',
+    transport,
     ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
   });
 

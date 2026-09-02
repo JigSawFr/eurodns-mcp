@@ -20,6 +20,7 @@ import type { GuardrailConfig } from '../config.js';
 import { AUDIT_SCOPE, type RiskClass } from '../constants.js';
 import { AUDIT_QUERY_TOOL_NAME } from './auditNames.js';
 import { PORTFOLIO_REFRESH_TOOL_NAME } from './portfolioNames.js';
+import { COMPAT_FETCH_TOOL_NAME, COMPAT_SEARCH_TOOL_NAME } from './compatNames.js';
 
 /** `domain-name` -> `domainName`, so tool arguments read like ordinary parameters. */
 export function toCamelCase(value: string): string {
@@ -181,6 +182,11 @@ export const HAND_WRITTEN_TOOL_REQUIREMENTS: Record<string, ToolRequirement> = {
   eurodns_dns_diff_zone: { risk: 'read', scope: scopeForRisk('read') },
   [AUDIT_QUERY_TOOL_NAME]: { risk: 'read', scope: AUDIT_SCOPE },
   [PORTFOLIO_REFRESH_TOOL_NAME]: { risk: 'read', scope: scopeForRisk('read') },
+  // Listed whether or not `EURODNS_COMPAT_TOOLS` registers them. An entry for a tool that
+  // does not exist costs nothing — the call fails as unknown either way — where a missing
+  // entry would let the HTTP gate wave the call through on the one deployment that does.
+  [COMPAT_SEARCH_TOOL_NAME]: { risk: 'read', scope: scopeForRisk('read') },
+  [COMPAT_FETCH_TOOL_NAME]: { risk: 'read', scope: scopeForRisk('read') },
 };
 
 /**
