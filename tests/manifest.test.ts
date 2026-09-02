@@ -47,6 +47,27 @@ describe('the published identity', () => {
   });
 
   /**
+   * The lockfile carries its own copy of the name, and renaming the package does not touch
+   * it: `npm install --package-lock-only` does. `npm ci` tolerates the mismatch, so nothing
+   * fails — the two simply disagree about what this package is called, quietly, until someone
+   * reads the published tarball's lockfile and wonders. That is how it survived the rename
+   * that introduced it.
+   */
+  it('agrees with the lockfile about its own name', () => {
+    const lock = json('package-lock.json') as unknown as {
+      name: string;
+      version: string;
+      packages: Record<string, { name?: string; version?: string }>;
+    };
+
+    expect(lock.name).toBe(pkg.name);
+    expect(lock.version).toBe(pkg.version);
+    // The root entry repeats both, and `npm install --package-lock-only` rewrites all four.
+    expect(lock.packages['']?.name).toBe(pkg.name);
+    expect(lock.packages['']?.version).toBe(pkg.version);
+  });
+
+  /**
    * A scoped package is restricted by default. Without this field the first publish either
    * fails outright or, worse, succeeds privately — a package nobody can install, which looks
    * exactly like one that was never published.
