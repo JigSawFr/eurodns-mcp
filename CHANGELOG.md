@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.1](https://github.com/JigSawFr/eurodns-mcp/compare/v0.7.0...v0.7.1) (2026-09-02)
+
+
+### Bug fixes
+
+* **tools:** stop being narrower than the API, and cut indentation before data ([#55](https://github.com/JigSawFr/eurodns-mcp/issues/55)) ([f5bc5ee](https://github.com/JigSawFr/eurodns-mcp/commit/f5bc5ee61f0f15621445a829bc703ec037149d43))
+
 ## [0.7.0](https://github.com/JigSawFr/eurodns-mcp/compare/v0.6.0...v0.7.0) (2026-09-01)
 
 
