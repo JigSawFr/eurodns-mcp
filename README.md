@@ -11,6 +11,7 @@ domains, DNS zones, contacts, subscriptions, SSL, invoices and orders.
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%E2%89%A522-brightgreen.svg)](package.json)
 [![MCP](https://img.shields.io/badge/MCP-2026--07--28-8A63D2.svg)](https://modelcontextprotocol.io/specification/2026-07-28)
+[![npm](https://img.shields.io/npm/v/%40jigsawfr%2Feurodns-mcp.svg?color=CB3837&logo=npm)](https://www.npmjs.com/package/@jigsawfr/eurodns-mcp)
 [![Image](https://img.shields.io/badge/ghcr.io-eurodns--mcp-2496ED.svg)](https://github.com/JigSawFr/eurodns-mcp/pkgs/container/eurodns-mcp)
 
 **[Documentation](docs/README.md)** · [Tools](docs/tools.md) · [Guardrails](docs/guardrails.md) · [Deploying](deploy/README.md)
@@ -83,15 +84,14 @@ authenticates every caller with one shared key and cannot attribute anything its
 
 ## Quick start
 
-The package is not on npm yet, so it installs from this repository. For a client that spawns
-the server itself, such as Claude Desktop:
+For a client that spawns the server itself, such as Claude Desktop:
 
 ```json
 {
   "mcpServers": {
     "eurodns": {
       "command": "npx",
-      "args": ["-y", "-p", "github:JigSawFr/eurodns-mcp", "eurodns-mcp"],
+      "args": ["-y", "@jigsawfr/eurodns-mcp"],
       "env": {
         "EURODNS_APP_ID": "your-application-id",
         "EURODNS_API_KEY": "your-api-key"
@@ -104,16 +104,12 @@ the server itself, such as Claude Desktop:
 To try it in a terminal first:
 
 ```bash
-npx -y -p github:JigSawFr/eurodns-mcp eurodns-mcp
+npx -y @jigsawfr/eurodns-mcp
 ```
 
-`-p … eurodns-mcp` names the command to run. Without it npm looks for a command matching the
-package name, `eurodns-mcp-server`, finds two that do not match, and refuses to guess:
-`could not determine executable to run`. `eurodns-mcp-http` is the other one, for the HTTP
-transport.
-
-Installing this way clones the repository and builds it, so it needs read access — until the
-repository is public, that means being signed in to a git account that has it.
+The package ships two commands: `eurodns-mcp` for stdio, which is the one above, and
+`eurodns-mcp-http` for the HTTP transport — reachable as
+`npx -p @jigsawfr/eurodns-mcp eurodns-mcp-http`.
 
 For a shared deployment over HTTP, use the container instead — see [Deployment](#deployment).
 
