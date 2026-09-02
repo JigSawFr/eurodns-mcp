@@ -26,6 +26,21 @@ Every tool name is prefixed with `eurodns_` so it cannot collide with another se
 carries `readOnlyHint`, `destructiveHint` and `idempotentHint` annotations derived from what
 the operation actually does.
 
+## What the model is told before it starts
+
+The handshake carries an `instructions` block, which is the one piece of text every client
+injects into the model's context. This page explains the same traps to you at length; a model
+reaching for a tool has never read it, and used to discover them by making them against a live
+account.
+
+It is derived from the configuration rather than fixed, so it names the character limit **this**
+deployment enforces and the risk classes it hides — a hidden tool is absent rather than refused,
+and the block says which variable would bring it back. It runs to about 450 tokens, paid once
+per session, and deliberately covers only what costs data to get wrong: the zone save that
+replaces everything, `rdata`, the TTL list, the pseudo record types, the shape of a listing
+call, and the fact that a `403` is an allowlist problem. Everything else lives in the tool
+descriptions, which are only paid for when a tool is used.
+
 ## Pagination
 
 Every tool over a list endpoint takes four ordinary arguments — `page`, `size`, `sortField`

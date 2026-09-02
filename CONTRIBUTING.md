@@ -3,6 +3,9 @@
 Thanks for taking the time. This is a small project with a few conventions that are load
 bearing rather than decorative — this page is the short version of why each one exists.
 
+Working through a coding agent? [`AGENTS.md`](AGENTS.md) is the same ground rules in the form
+agents read, plus the layout of the tree and the commands that matter.
+
 ## Getting set up
 
 ```bash
