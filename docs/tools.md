@@ -59,6 +59,33 @@ saying how much was omitted. So `-1` is right for a caller that raised the limit
 and wrong for one that did not: it will get the same truncation, having paid for the whole
 list upstream.
 
+## Prompts, and what the server says it allows
+
+Two MCP primitives sit beside the tools. Neither costs anything until it is used.
+
+**Prompts** are workflows a person asks for by name — in most clients, a slash command. Each is
+several tool calls in a fixed order with a judgement at the end, which is the shape that is
+tedious to re-derive and easy to get subtly wrong.
+
+| Prompt                   | Arguments               | What it does                                                                                                              |
+| ------------------------ | ----------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `eurodns_zone_review`    | `domainName`            | Reads a zone and reports missing mail authentication, dangling CNAMEs, nameserver drift and TTL extremes. Writes nothing. |
+| `eurodns_expiry_review`  | `withinDays` (opt., 90) | Everything expiring in the window, with its renewal method, and separately the entries that will not renew themselves.    |
+| `eurodns_acme_challenge` | `domainName`, `token`   | Diff first, then publish the `_acme-challenge` TXT at TTL 600, then read it back.                                         |
+| `eurodns_change_review`  | `since`                 | Reads the audit log, groups by actor, and puts refusals and a broken hash chain first.                                    |
+
+The last two are **conditional**, on the same tests that decide whether the tools they drive
+exist: `eurodns_acme_challenge` is absent under `EURODNS_READ_ONLY`, and `eurodns_change_review`
+is absent unless the audit log is a file that can be queried. A prompt telling a model to call a
+tool that is not there is worse than no prompt.
+
+**One resource**, `eurodns://deployment`, answers the question a hidden tool cannot: _why is it
+not here?_ It returns the guardrails in force, the risk classes hidden from the tool list with
+the variable that would restore each, the character limit and timeout, the authentication mode,
+and whether history can be queried. It carries no credential and no address — not the
+application id, the API key, the token, or the upstream URL — and a test asserts that absence
+rather than the shape, so a field added later cannot quietly leak one.
+
 ## The DNS workflow tools
 
 `PUT /dns-zones/{domain}` replaces the **entire** zone document: a caller that sends a

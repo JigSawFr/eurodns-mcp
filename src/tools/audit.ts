@@ -6,6 +6,7 @@ import { queryAuditLog, type AuditQuery } from '../auditReader.js';
 import { formatJson } from '../services/format.js';
 import { identityFrom } from './registry.js';
 import { AUDIT_QUERY_TOOL_NAME } from './auditNames.js';
+import type { Config } from '../config.js';
 import type { ToolContext } from './context.js';
 
 const DEFAULT_LIMIT = 50;
@@ -19,11 +20,23 @@ const MAX_LIMIT = 500;
  * something answerable in conversation — and also why it is off by default, needs its own
  * scope, and shows a caller only their own history unless an operator opens it wider.
  */
-export function registerAuditTools(server: McpServer, context: ToolContext): number {
-  const { destination, filePath, query } = context.config.audit;
+/**
+ * Whether the audit-query tool exists on this deployment.
+ *
+ * Only a file can be read back; the configuration layer already refuses other pairings. This
+ * is a predicate rather than a line inside the registration because a prompt that tells a
+ * model to call the tool has to be conditioned on exactly the same test — and a second copy
+ * of it would be a second thing to keep in step.
+ */
+export function auditQueryAvailable(config: Config): boolean {
+  const { destination, filePath, query } = config.audit;
+  return query !== 'off' && destination === 'file' && Boolean(filePath);
+}
 
-  // Only a file can be read back; the configuration layer already refuses other pairings.
-  if (query === 'off' || destination !== 'file' || !filePath) return 0;
+export function registerAuditTools(server: McpServer, context: ToolContext): number {
+  const { filePath, query } = context.config.audit;
+
+  if (!auditQueryAvailable(context.config) || !filePath) return 0;
 
   const scopedToCaller = query === 'own';
 

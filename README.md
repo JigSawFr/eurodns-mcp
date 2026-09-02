@@ -30,6 +30,8 @@ domains, DNS zones, contacts, subscriptions, SSL, invoices and orders.
 - **Full API coverage** — 79 tools generated from the OpenAPI document, grouped into 16 areas.
 - **Three DNS workflow tools** that make record edits safe, because saving a zone replaces it.
 - **Guardrails** so a deployment can refuse operations that spend money or destroy things.
+- **Four prompts** for the workflows worth naming, and a resource that says what this
+  deployment allows — including why a tool you expected is not in the list.
 - **Two transports** — `stdio` for a local client, streamable HTTP for a shared deployment.
 - **Both protocol eras on one endpoint** — speaks the 2026-07-28 revision natively and
   still serves 2025-era clients, which is most of them today.
@@ -136,7 +138,7 @@ ways around it.
 
 | Page                                     | What it covers                                                          |
 | ---------------------------------------- | ----------------------------------------------------------------------- |
-| [Tools](docs/tools.md)                   | All 82 tools, how they are named, and the three DNS workflow tools      |
+| [Tools](docs/tools.md)                   | All 82 tools, the prompts and the deployment resource                   |
 | [Guardrails](docs/guardrails.md)         | Risk classes, what a deployment can forbid, confirmation before a call  |
 | [Configuration](docs/configuration.md)   | Every environment variable, with its default                            |
 | [HTTP transport](docs/http-transport.md) | Serving several clients, static tokens, OAuth 2.1 and scopes            |
