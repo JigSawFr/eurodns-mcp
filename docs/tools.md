@@ -79,7 +79,17 @@ exist: `eurodns_acme_challenge` is absent under `EURODNS_READ_ONLY`, and `eurodn
 is absent unless the audit log is a file that can be queried. A prompt telling a model to call a
 tool that is not there is worse than no prompt.
 
-**One resource**, `eurodns://deployment`, answers the question a hidden tool cannot: _why is it
+A name typed into `domainName` — in a prompt or in the resource template below — **completes
+from the account's own domains**. MCP completes prompt arguments and resource-template
+variables, never tool arguments, so those two are its whole reach. The list is cached for
+[`EURODNS_PORTFOLIO_TTL_MS`](configuration.md) (ten minutes by default) and concurrent
+lookups share one upstream call, because completion is typed into and a full portfolio search
+per keystroke would cost more than the feature is worth. `eurodns_portfolio_refresh` re-reads
+it on demand, for the one moment the TTL is wrong: just after registering a domain.
+
+**Two resources.** `eurodns://domain/{domainName}` is the portfolio, addressable and
+browsable: it lists every domain as something a client can open, and reading one returns its
+registry record. `eurodns://deployment` answers the question a hidden tool cannot: _why is it
 not here?_ It returns the guardrails in force, the risk classes hidden from the tool list with
 the variable that would restore each, the character limit and timeout, the authentication mode,
 and whether history can be queried. It carries no credential and no address — not the

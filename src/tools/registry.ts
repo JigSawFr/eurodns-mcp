@@ -19,6 +19,7 @@ import type { CallerIdentity, ToolContext } from './context.js';
 import type { GuardrailConfig } from '../config.js';
 import { AUDIT_SCOPE, type RiskClass } from '../constants.js';
 import { AUDIT_QUERY_TOOL_NAME } from './auditNames.js';
+import { PORTFOLIO_REFRESH_TOOL_NAME } from './portfolioNames.js';
 
 /** `domain-name` -> `domainName`, so tool arguments read like ordinary parameters. */
 export function toCamelCase(value: string): string {
@@ -179,6 +180,7 @@ export const HAND_WRITTEN_TOOL_REQUIREMENTS: Record<string, ToolRequirement> = {
   eurodns_dns_delete_record: { risk: 'write', scope: scopeForRisk('write') },
   eurodns_dns_diff_zone: { risk: 'read', scope: scopeForRisk('read') },
   [AUDIT_QUERY_TOOL_NAME]: { risk: 'read', scope: AUDIT_SCOPE },
+  [PORTFOLIO_REFRESH_TOOL_NAME]: { risk: 'read', scope: scopeForRisk('read') },
 };
 
 /**

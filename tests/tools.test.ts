@@ -11,7 +11,9 @@ describe('tool surface', () => {
     });
     const { tools } = await client.listTools();
 
-    expect(toolCount).toBe(OPERATIONS.length + 3);
+    // Four hand-written tools: three DNS workflow tools and the portfolio refresh. The audit
+    // query is not among them — it is off on this configuration.
+    expect(toolCount).toBe(OPERATIONS.length + 4);
     expect(tools).toHaveLength(toolCount);
 
     const names = tools.map((t) => t.name);
@@ -27,6 +29,7 @@ describe('tool surface', () => {
       'eurodns_dns_upsert_record',
       'eurodns_dns_delete_record',
       'eurodns_dns_diff_zone',
+      'eurodns_portfolio_refresh',
     ];
     for (const name of handWritten) {
       expect(generated, name).not.toContain(name);

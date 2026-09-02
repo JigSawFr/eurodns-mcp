@@ -10,6 +10,7 @@ import {
   DEFAULT_RATE_LIMIT_WINDOW_MS,
   DEFAULT_BASE_URL,
   DEFAULT_CHARACTER_LIMIT,
+  DEFAULT_PORTFOLIO_TTL_MS,
   DEFAULT_JWT_ALGORITHMS,
   DEFAULT_MAX_BODY_BYTES,
   DEFAULT_MAX_RETRIES,
@@ -36,6 +37,8 @@ const upstreamSchema = z.object({
   timeoutMs: z.number().int().positive(),
   maxRetries: z.number().int().nonnegative(),
   characterLimit: z.number().int().positive(),
+  /** How long the domain list backing completion is held. See DEFAULT_PORTFOLIO_TTL_MS. */
+  portfolioTtlMs: z.number().int().positive(),
 });
 
 export type UpstreamConfig = z.infer<typeof upstreamSchema>;
@@ -231,6 +234,11 @@ export function loadConfig(
         intFromEnv(DEFAULT_CHARACTER_LIMIT),
         env.EURODNS_CHARACTER_LIMIT,
         'characterLimit',
+      ),
+      portfolioTtlMs: parseOrThrow(
+        intFromEnv(DEFAULT_PORTFOLIO_TTL_MS),
+        env.EURODNS_PORTFOLIO_TTL_MS,
+        'portfolioTtlMs',
       ),
     },
     'upstream',
