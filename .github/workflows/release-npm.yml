@@ -10,10 +10,19 @@ name: Publish to npm
 # default GITHUB_TOKEN, and GitHub starts no workflow run from an event that token raised. The
 # release for v0.2.0 published with no image because of exactly that.
 #
-# Two things have to be in place on npmjs.com before this can succeed, and neither can be done
-# from here: the package must exist (trusted publishing cannot perform a first publish — npm
-# will not let you configure OIDC on a package that is not there yet), and a trusted publisher
-# must point at this repository and this workflow file. Provenance additionally requires the
+# The trusted publisher on npmjs.com must name **release-please.yml**, not this file. npm
+# validates the workflow that *entered* the run, and this one is reached through
+# `workflow_call`, so the OIDC claim it checks carries the caller's name. Naming this file
+# instead is the configuration that produces `E404 Not Found` on the PUT — npm masks the
+# authorization failure as a missing package, which reads like the package does not exist.
+#
+# That also means the `workflow_dispatch` below cannot publish: dispatching makes this file
+# the entry point, which will not match a publisher registered for release-please.yml. It is
+# still useful for exercising the build and test steps against a tag.
+#
+# Two more things have to be in place on npmjs.com, and neither can be done from here: the
+# package must exist (trusted publishing cannot perform a first publish — npm will not let you
+# configure OIDC on a package that is not there yet), and provenance additionally requires the
 # source repository to be public.
 
 on:

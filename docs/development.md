@@ -35,7 +35,13 @@ release shipped with no image for exactly that reason.
 
 The npm publish authenticates over OIDC — there is no `NPM_TOKEN` anywhere — and npm attaches
 a provenance attestation on its own, which is why the job needs `id-token: write` and nothing
-else. Provenance requires this repository to stay public. `server.json` carries the version
+else. Provenance requires this repository to stay public.
+
+**The trusted publisher on npmjs.com must name `release-please.yml`.** npm validates the
+workflow that entered the run, and `release-npm.yml` is reached through `workflow_call`, so the
+OIDC claim npm checks carries the caller's name. Registering `release-npm.yml` instead fails
+with `E404 Not Found` on the PUT — npm masks the authorization failure as a missing package,
+which reads like the package was never published. It cost one release to learn. `server.json` carries the version
 twice for the MCP registry, and release-please keeps both in step through `extra-files`;
 `tests/manifest.test.ts` fails if they ever drift, because the registry's own answer when they
 disagree is "validation failed" without naming the field.
