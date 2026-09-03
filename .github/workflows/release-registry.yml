@@ -1,0 +1,66 @@
+name: Publish to the MCP registry
+
+# Called by release-please.yml once npm has accepted the version, and runnable by hand for a
+# tag that was missed. Nothing here needs a secret: `login github-oidc` exchanges the
+# workflow's own OIDC token, which is why `id-token: write` is the whole of what it wants.
+#
+# It runs after the npm publish, not beside it. The registry entry names an npm package
+# version, so publishing it before npm has accepted that version would advertise something
+# nobody can install.
+#
+# The registry authorises against the `io.github.<owner>/<repo>` namespace in server.json,
+# matched to the repository in the OIDC claim. That is not the workflow-filename match npm
+# uses, so the caller/callee trap that broke the npm publish should not apply here — but it
+# has not been proven on this repository, and a first run is the proof.
+#
+# server.json is read as committed. release-please keeps its two version fields in step with
+# package.json through `extra-files`, and tests/manifest.test.ts fails the build if they drift.
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: Git tag to publish, for example v0.8.1.
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: >-
+          Git tag to publish, for example v0.8.1. The registry accepts a version only once,
+          so re-dispatching a published tag fails rather than overwriting anything.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  # Pinned, and the checksum is verified below. The upstream instructions fetch
+  # `releases/latest`, which would let an unreviewed binary into a release job of a repository
+  # that pins every action by commit and every base image by digest.
+  PUBLISHER_VERSION: v1.8.1
+  PUBLISHER_SHA256: a06c9096dcb9727c13555b6be26c7effa707b01f06a4c561ba7a3635443cf2cc
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      # The tag, not the branch — same reason as the npm job.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.tag }}
+
+      - name: Fetch the publisher, and refuse it if it is not the binary we pinned
+        run: |
+          curl -fsSL -o mcp-publisher.tar.gz \
+            "https://github.com/modelcontextprotocol/registry/releases/download/${PUBLISHER_VERSION}/mcp-publisher_linux_amd64.tar.gz"
+          echo "${PUBLISHER_SHA256}  mcp-publisher.tar.gz" | sha256sum -c -
+          tar xzf mcp-publisher.tar.gz mcp-publisher
+
+      # Cheap, and it fails here rather than after authenticating.
+      - run: ./mcp-publisher validate
+
+      - run: ./mcp-publisher login github-oidc
+      - run: ./mcp-publisher publish

@@ -2,7 +2,7 @@ name: Release Please
 
 # Accumulates a release PR from Conventional Commit subjects. Merging that PR bumps the
 # version, writes CHANGELOG.md, tags, and publishes a GitHub Release — and then calls the
-# image and npm workflows directly.
+# image, npm and MCP registry workflows directly.
 #
 # Calling them is not a stylistic choice. The Release is created with the default GITHUB_TOKEN,
 # and GitHub raises no workflow run from an event that token created, so a workflow listening
@@ -59,5 +59,18 @@ jobs:
       contents: read
       id-token: write
     uses: ./.github/workflows/release-npm.yml
+    with:
+      tag: ${{ needs.release-please.outputs.tag_name }}
+
+  publish-registry:
+    # After npm, not beside it: the registry entry names an npm package version, and
+    # advertising one npm has not accepted would point every client at something they cannot
+    # install. A failed npm publish therefore leaves the registry untouched.
+    needs: [release-please, publish-npm]
+    if: needs.release-please.outputs.release_created == 'true'
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/release-registry.yml
     with:
       tag: ${{ needs.release-please.outputs.tag_name }}
