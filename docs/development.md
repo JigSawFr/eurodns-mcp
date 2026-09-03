@@ -37,6 +37,12 @@ The npm publish authenticates over OIDC — there is no `NPM_TOKEN` anywhere —
 a provenance attestation on its own, which is why the job needs `id-token: write` and nothing
 else. Provenance requires this repository to stay public.
 
+The MCP registry publish runs **after** npm rather than beside it: its entry names an npm
+package version, so announcing one npm has not accepted would point every client at something
+they cannot install. It authenticates the same tokenless way, reads `server.json` as committed,
+and pins the publisher CLI by version with its checksum verified — the upstream instructions
+fetch `releases/latest`, which does not belong in a repository that pins every action by commit.
+
 **The trusted publisher on npmjs.com must name `release-please.yml`.** npm validates the
 workflow that entered the run, and `release-npm.yml` is reached through `workflow_call`, so the
 OIDC claim npm checks carries the caller's name. Registering `release-npm.yml` instead fails
