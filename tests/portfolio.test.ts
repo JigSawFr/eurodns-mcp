@@ -205,6 +205,27 @@ describe('the cached domain list', () => {
    *
    * This stub answers like the real thing. It fails if `-1` ever comes back.
    */
+  /**
+   * The vendor deviates from its own spec, so a page can carry an entry with no usable name.
+   * Those are dropped rather than turned into an empty suggestion.
+   */
+  it('skips entries a page carries without a usable name', async () => {
+    const fetchImpl = async () =>
+      new Response(
+        JSON.stringify([
+          { domainName: 'a.com' },
+          { tldName: 'org' },
+          { domainName: '' },
+          { domainName: 'b.com' },
+        ]),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      );
+    const client = new EuroDnsClient(testConfig().upstream, fetchImpl);
+    const cache = new PortfolioCache({ ttlMs: 60_000, maxEntries: 100 });
+
+    expect(await cache.list(client)).toEqual(['a.com', 'b.com']);
+  });
+
   it('never asks for the size the API rejects', async () => {
     const { client, sizes } = vendorFaithfulClient(['a.com', 'b.com']);
     const cache = new PortfolioCache({ ttlMs: 60_000, maxEntries: 100 });
