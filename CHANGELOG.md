@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.1](https://github.com/JigSawFr/eurodns-mcp/compare/v0.9.0...v0.9.1) (2026-09-03)
+
+
+### Bug fixes
+
+* stop asking for a pagination size the API rejects ([#81](https://github.com/JigSawFr/eurodns-mcp/issues/81)) ([7b56223](https://github.com/JigSawFr/eurodns-mcp/commit/7b56223d92a26d396995d12986b93f95c283cd6d))
+
 ## [0.9.0](https://github.com/JigSawFr/eurodns-mcp/compare/v0.8.1...v0.9.0) (2026-09-03)
 
 
