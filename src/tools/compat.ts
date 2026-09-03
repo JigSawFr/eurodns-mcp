@@ -5,6 +5,7 @@ import { formatJson } from '../services/format.js';
 import { identityFrom } from './registry.js';
 import { COMPAT_FETCH_TOOL_NAME, COMPAT_SEARCH_TOOL_NAME } from './compatNames.js';
 import type { ToolContext } from './context.js';
+import { MAX_PAGE_SIZE } from '../constants.js';
 
 /**
  * The `search` / `fetch` pair some clients require before they will install a server at all.
@@ -83,11 +84,14 @@ function registerSearch(server: McpServer, context: ToolContext): void {
       const gate = beginRead(context, ctx?.http?.authInfo, COMPAT_SEARCH_TOOL_NAME, args.query);
       if (gate.refusal) return gate.refusal;
 
+      // One page, not `size: -1`: the vendor documents that sentinel on this endpoint and the
+      // API rejects it (see MAX_PAGE_SIZE). A single page is no loss here — a result set
+      // larger than this is truncated by the character limit long before it reaches a client.
       const response = await context.client.request<SearchedDomain[]>({
         method: 'POST',
         path: '/domains/search',
         body: { term: args.query },
-        pagination: { size: -1 },
+        pagination: { size: MAX_PAGE_SIZE },
       });
 
       const results = (Array.isArray(response.data) ? response.data : [])

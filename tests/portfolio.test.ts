@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { PortfolioCache } from '../src/services/portfolio.js';
-import { EuroDnsClient } from '../src/services/client.js';
+import { EuroDnsClient, type FetchLike } from '../src/services/client.js';
 import { loadConfig } from '../src/config.js';
 import { connect, isError, stubFetch, testConfig } from './harness.js';
 import { DOMAIN_RESOURCE_TEMPLATE } from '../src/resources.js';
+import { MAX_PAGE_SIZE } from '../src/constants.js';
 
 /** A client over a counting stub, so assertions can be about calls rather than results. */
 function countingClient(names: string[]) {
@@ -17,6 +18,49 @@ function countingClient(names: string[]) {
   };
   const client = new EuroDnsClient(testConfig().upstream, fetchImpl);
   return { client, calls: () => calls };
+}
+
+/**
+ * A client over a stub that behaves like the live API on `pagination-size`.
+ *
+ * It rejects `-1` with the vendor's own message and status, and it pages: a request for page
+ * N returns that slice, so a caller that never advances the page comes back short. Both
+ * halves matter — the first catches the sentinel, the second catches a loop that does not
+ * loop.
+ */
+function vendorFaithfulClient(names: string[]) {
+  const sizes: string[] = [];
+  const pages: string[] = [];
+
+  const fetchImpl: FetchLike = async (_url, init) => {
+    const headers: Record<string, string> = {};
+    for (const [key, value] of Object.entries((init.headers ?? {}) as Record<string, string>)) {
+      headers[key.toLowerCase()] = value;
+    }
+    const size = headers['pagination-size'] ?? '';
+    const page = headers['pagination-page'] ?? '1';
+    sizes.push(size);
+    pages.push(page);
+
+    if (size === '-1') {
+      return new Response(
+        JSON.stringify({ message: '[-1] is not a valid pagination-size header value.' }),
+        { status: 400, headers: { 'content-type': 'application/json' } },
+      );
+    }
+
+    const perPage = Number(size) || names.length;
+    const start = (Number(page) - 1) * perPage;
+    const slice = names.slice(start, start + perPage);
+
+    return new Response(JSON.stringify(slice.map((domainName) => ({ domainName }))), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  };
+
+  const client = new EuroDnsClient(testConfig({ EURODNS_MAX_RETRIES: '0' }).upstream, fetchImpl);
+  return { client, sizes: () => sizes, pages: () => pages };
 }
 
 describe('the cached domain list', () => {
@@ -149,6 +193,60 @@ describe('the cached domain list', () => {
 
     expect(await cache.complete(client, 'EXAMPLE')).toEqual(['Example.com']);
     expect(await cache.complete(client, '.net')).toEqual(['other.NET']);
+  });
+
+  /**
+   * The regression that shipped in 0.9.0, and the reason no test caught it.
+   *
+   * The cache asked for `pagination-size: -1`, which the vendor's document offers on this very
+   * endpoint. The API refuses it, so every completion failed — silently, because the failure
+   * path returns the previous list, which is empty until a call succeeds. Every stub in this
+   * file accepted any header, so the code and the API disagreed with nothing to notice.
+   *
+   * This stub answers like the real thing. It fails if `-1` ever comes back.
+   */
+  it('never asks for the size the API rejects', async () => {
+    const { client, sizes } = vendorFaithfulClient(['a.com', 'b.com']);
+    const cache = new PortfolioCache({ ttlMs: 60_000, maxEntries: 100 });
+
+    expect(await cache.list(client)).toEqual(['a.com', 'b.com']);
+    expect(sizes()).not.toContain('-1');
+  });
+
+  /**
+   * With no sentinel for "everything", a portfolio larger than one page has to be walked.
+   * The stub pages properly, so a cache that asked for page 1 only would come back short.
+   */
+  it('walks every page rather than assuming one holds the portfolio', async () => {
+    const many = Array.from({ length: MAX_PAGE_SIZE + 7 }, (_, i) => `d${i}.com`);
+    const { client, pages } = vendorFaithfulClient(many);
+    const cache = new PortfolioCache({ ttlMs: 60_000, maxEntries: 5_000 });
+
+    expect(await cache.list(client)).toHaveLength(MAX_PAGE_SIZE + 7);
+    expect(pages()).toEqual(['1', '2']);
+  });
+
+  /**
+   * An upstream that ignores `pagination-page` would hand back a full page forever. The
+   * ceiling has to end the loop on its own, or a completion would never return.
+   */
+  it('stops at the ceiling when the API never returns a short page', async () => {
+    const page = Array.from({ length: MAX_PAGE_SIZE }, (_, i) => `d${i}.com`);
+    let calls = 0;
+    const fetchImpl = async () => {
+      calls += 1;
+      return new Response(JSON.stringify(page.map((domainName) => ({ domainName }))), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    };
+    const client = new EuroDnsClient(testConfig().upstream, fetchImpl);
+    const cache = new PortfolioCache({ ttlMs: 60_000, maxEntries: MAX_PAGE_SIZE * 2 });
+
+    // Two calls, then the ceiling ends it: 500 collected, 1000 collected, loop condition
+    // false. Not one call, and not forever.
+    expect(await cache.list(client)).toHaveLength(MAX_PAGE_SIZE * 2);
+    expect(calls).toBe(2);
   });
 });
 

@@ -194,6 +194,19 @@ export const DEFAULT_PORTFOLIO_TTL_MS = 10 * 60_000;
 export const PORTFOLIO_MAX_ENTRIES = 5_000;
 
 /**
+ * The largest page a listing may ask for, and the size every internal listing does ask for.
+ *
+ * The vendor's own document offers `pagination-size: -1` — "results are returned in one page"
+ * — on `POST /domains/search`, `GET /zone-profiles` and `GET /tlds`. The API rejects it on all
+ * three with `[-1] is not a valid pagination-size header value`, while the same call with an
+ * explicit size answers 200. Measured against the live API, not inferred from the document.
+ *
+ * So there is no whole-portfolio shortcut. Anything that wants everything pages for it, and
+ * the ceiling doubles as a guard against a typo asking for a million.
+ */
+export const MAX_PAGE_SIZE = 500;
+
+/**
  * Reported when the package version cannot be read.
  *
  * Deliberately not a plausible number. Falling back to a credible-looking version would

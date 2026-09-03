@@ -17,7 +17,7 @@ import { toolNameFor } from './naming.js';
 import { describeOperation } from './overrides.js';
 import type { CallerIdentity, ToolContext } from './context.js';
 import type { GuardrailConfig } from '../config.js';
-import { AUDIT_SCOPE, type RiskClass } from '../constants.js';
+import { AUDIT_SCOPE, MAX_PAGE_SIZE, type RiskClass } from '../constants.js';
 import { AUDIT_QUERY_TOOL_NAME } from './auditNames.js';
 import { PORTFOLIO_REFRESH_TOOL_NAME } from './portfolioNames.js';
 import { COMPAT_FETCH_TOOL_NAME, COMPAT_SEARCH_TOOL_NAME } from './compatNames.js';
@@ -32,18 +32,16 @@ const TARGET_ARGUMENT_NAMES = ['domainName', 'subscriptionId', 'id', 'certificat
 
 const paginationShape: ZodRawShape = {
   page: z.number().int().min(1).optional().describe('1-based page number.'),
-  // `-1` is the API's own spelling for "everything in one page", documented on the
-  // `pagination-size` header. Rejecting it made this server narrower than the API it wraps,
-  // and pushed callers into paginating by hand for a result the vendor will return whole.
-  // The 500 ceiling stays as a guard against a typo asking for a million.
+  // No `-1` here, though the vendor's document offers it on three endpoints: the API rejects
+  // it on all three, measured rather than assumed. See MAX_PAGE_SIZE. Accepting a sentinel the
+  // upstream refuses would only move the failure from this schema to a 400 nobody expects.
   size: z
     .number()
     .int()
-    .refine((value) => value === -1 || (value >= 1 && value <= 500), {
-      message: 'size must be between 1 and 500, or -1 for every result in one page',
-    })
+    .min(1)
+    .max(MAX_PAGE_SIZE)
     .optional()
-    .describe('Results per page, or -1 for all results in a single page.'),
+    .describe(`Results per page, 1 to ${MAX_PAGE_SIZE}.`),
   sortField: z.string().optional().describe('Field to sort by.'),
   sortOrder: z.enum(['ASC', 'DESC']).optional().describe('Sort direction.'),
 };

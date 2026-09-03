@@ -70,7 +70,7 @@ result is never silently partial.
 where a very long list is a cost rather than an answer. A dashboard or a script parsing the
 JSON has no such limit and truncation is pure loss for it; set this to whatever that caller
 can actually handle. The trade is real either way — see
-[`eurodns_domain_search`](tools.md) and its `size: -1`.
+[`eurodns_domain_search`](tools.md) and its `size` ceiling of 500.
 
 ### `EURODNS_PORTFOLIO_TTL_MS`
 
@@ -78,7 +78,7 @@ Default `600000` (ten minutes). How long the account's domain list is held to an
 completion — the suggestions offered as a domain name is typed into a prompt argument or the
 `eurodns://domain/{domainName}` resource template. Positive integer, in milliseconds.
 
-The list comes from one full portfolio search. Without a cache, every keystroke would be one
+The list comes from a full portfolio search, walked page by page. Without a cache, every keystroke would be one
 of those against an API that filters by source IP and rate-limits, so the feature would cost
 more than it is worth. Concurrent lookups share a single upstream call rather than starting
 one each, which is what bounds the cost — a TTL alone would not, since an empty cache under

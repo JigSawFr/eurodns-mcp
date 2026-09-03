@@ -1,4 +1,5 @@
 import type { EuroDnsClient } from './client.js';
+import { MAX_PAGE_SIZE } from '../constants.js';
 
 /** One entry of the search result, narrowed to the field this cache is about. */
 interface SearchedDomain {
@@ -101,22 +102,39 @@ export class PortfolioCache {
     return this.inFlight;
   }
 
+  /**
+   * Every page of the portfolio search, concatenated.
+   *
+   * This used to be one call with `pagination-size: -1`, which the vendor's document offers on
+   * this exact endpoint and the API refuses — so completion had nothing to suggest, and said
+   * so only on stderr. See MAX_PAGE_SIZE for the measurement.
+   *
+   * The loop cannot run away. It stops on a short page, which is the ordinary end, and on
+   * `maxEntries` regardless — so an upstream that ignored `pagination-page` and returned a
+   * full page forever would still cost a bounded number of calls rather than spinning.
+   */
   private async fetchNames(client: EuroDnsClient): Promise<string[]> {
     try {
-      // `size: -1` is the API's own request for every result in one page, which is the whole
-      // point: one call rather than a loop whose length nothing here can predict.
-      const response = await client.request<SearchedDomain[]>({
-        method: 'POST',
-        path: '/domains/search',
-        body: {},
-        pagination: { size: -1 },
-      });
+      const collected: string[] = [];
 
-      const names = (Array.isArray(response.data) ? response.data : [])
-        .map((entry) => entry?.domainName)
-        .filter((name): name is string => typeof name === 'string' && name.length > 0)
-        .slice(0, this.maxEntries)
-        .sort((a, b) => a.localeCompare(b));
+      for (let page = 1; collected.length < this.maxEntries; page += 1) {
+        const response = await client.request<SearchedDomain[]>({
+          method: 'POST',
+          path: '/domains/search',
+          body: {},
+          pagination: { page, size: MAX_PAGE_SIZE },
+        });
+
+        const entries = Array.isArray(response.data) ? response.data : [];
+        for (const entry of entries) {
+          const name = entry?.domainName;
+          if (typeof name === 'string' && name.length > 0) collected.push(name);
+        }
+
+        if (entries.length < MAX_PAGE_SIZE) break;
+      }
+
+      const names = collected.slice(0, this.maxEntries).sort((a, b) => a.localeCompare(b));
 
       this.names = names;
       this.fetchedAt = this.now();

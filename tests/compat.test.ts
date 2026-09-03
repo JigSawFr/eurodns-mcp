@@ -125,6 +125,33 @@ describe('the search/fetch compatibility pair', () => {
     }
   });
 
+  /**
+   * The same defect the portfolio cache carried, in the other place it was hardcoded.
+   *
+   * `search` asked for `pagination-size: -1`. The vendor's document offers that on this exact
+   * endpoint; the API answers `400`. So the one tool a ChatGPT connector requires failed on
+   * every call, and no test saw it because every stub here accepts any header.
+   */
+  it('never asks for the size the API rejects', async () => {
+    const { fetchImpl, requests } = stubFetch((req) =>
+      req.headers['pagination-size'] === '-1'
+        ? {
+            status: 400,
+            body: { message: '[-1] is not a valid pagination-size header value.' },
+          }
+        : { body: [{ domainName: 'example.com' }] },
+    );
+    const { client, close } = await connect({ config: enabled(), fetchImpl });
+    try {
+      const result = await client.callTool({ name: 'search', arguments: { query: 'example' } });
+
+      expect(isError(result)).toBe(false);
+      expect(requests[0]?.headers['pagination-size']).not.toBe('-1');
+    } finally {
+      await close();
+    }
+  });
+
   it('fetches one record by the id a search result carried', async () => {
     const { fetchImpl, requests } = stubFetch(() => ({
       body: { domainName: 'example.com', expirationDate: '2027-01-01' },
