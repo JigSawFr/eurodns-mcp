@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.1](https://github.com/JigSawFr/eurodns-mcp/compare/v0.8.0...v0.8.1) (2026-09-03)
+
+
+### Bug fixes
+
+* stop the markup strip from eating a comparison ([#77](https://github.com/JigSawFr/eurodns-mcp/issues/77)) ([691bb4d](https://github.com/JigSawFr/eurodns-mcp/commit/691bb4d10766cffe641f4656091d5744f0463dd8))
+
 ## [0.8.0](https://github.com/JigSawFr/eurodns-mcp/compare/v0.7.1...v0.8.0) (2026-09-02)
 
 
