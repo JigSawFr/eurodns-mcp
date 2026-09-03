@@ -122,13 +122,38 @@ export const DESCRIPTION_OVERRIDES: Record<string, string> = {
     'is never recorded here.',
 };
 
-/** Strips the light HTML the document uses inside descriptions. */
-function stripMarkup(value: string): string {
-  return value
-    .replace(/<br\s*\/?>/gi, ' ')
-    .replace(/<[^>]+>/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
+/**
+ * Strips the light HTML the document uses inside descriptions.
+ *
+ * Two things changed from the catch-all `<[^>]+>` this replaces, and both were verified
+ * against the vendored document rather than assumed.
+ *
+ * **A tag must start with a letter.** The catch-all treated any span between two angle
+ * brackets as a tag, so "values < 500 and count > 0" came out as "values 0" — silently. The
+ * document contains no such text today (checked: all 762 summary and description fields, and
+ * `<br>` is the only markup in any of them), but the failure mode is invisible and the guard
+ * costs one character class.
+ *
+ * **The strip repeats until the text stops changing.** `[^<>]*` cannot cross a `<`, so on
+ * `<scr<a>ipt>` the inner `<a>` matches, and removing it joins the halves either side into a
+ * real `<script>` that a single pass would hand back intact. The loop ends when a pass
+ * changes nothing, which is at most once more than the nesting depth.
+ *
+ * This is still not a sanitizer and must not be reused as one: the input is
+ * `spec/openapi.json`, vendored here and read at build time, and the output is plain text in
+ * a tool description, never markup rendered anywhere. Against genuinely hostile input the
+ * answer is a parser.
+ */
+export function stripMarkup(value: string): string {
+  let text = value.replace(/<br\s*\/?>/gi, ' ');
+
+  let previous: string;
+  do {
+    previous = text;
+    text = text.replace(/<\/?[a-zA-Z][^<>]*>/g, '');
+  } while (text !== previous);
+
+  return text.replace(/\s+/g, ' ').trim();
 }
 
 export function describeOperation(operation: GeneratedOperation): string {
