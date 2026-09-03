@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.0](https://github.com/JigSawFr/eurodns-mcp/compare/v0.8.1...v0.9.0) (2026-09-03)
+
+
+### Features
+
+* publish to the MCP registry from the release, and name the workflow npm checks ([#79](https://github.com/JigSawFr/eurodns-mcp/issues/79)) ([1ce6f6b](https://github.com/JigSawFr/eurodns-mcp/commit/1ce6f6b30d43b9d31508479b43694f407149b1c9))
+
 ## [0.8.1](https://github.com/JigSawFr/eurodns-mcp/compare/v0.8.0...v0.8.1) (2026-09-03)
 
 
