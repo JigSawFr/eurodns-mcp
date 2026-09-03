@@ -66,34 +66,33 @@ describe('tool surface', () => {
     await close();
   });
 
-  /**
-   * `-1` is the API's own spelling for "everything in one page". Rejecting it made this
-   * server narrower than the API it wraps and pushed callers into paginating by hand for a
-   * result the vendor returns whole.
-   */
-  it("passes -1 through as the API's own request for a single page", async () => {
+  it('passes a size in range through as the pagination header', async () => {
     const { fetchImpl, requests } = stubFetch(() => ({ body: [] }));
     const { client, close } = await connect({ fetchImpl });
 
     const result = await client.callTool({
       name: 'eurodns_invoice_list',
-      arguments: { size: -1 },
+      arguments: { size: 500 },
     });
 
     expect(isError(result)).toBe(false);
-    expect(requests[0]?.headers['pagination-size']).toBe('-1');
+    expect(requests[0]?.headers['pagination-size']).toBe('500');
     await close();
   });
 
-  it('still refuses a size that is neither in range nor -1, before dispatching', async () => {
+  /**
+   * `-1` belongs in this list even though the vendor's OpenAPI document offers it on three
+   * endpoints: the live API answers `[-1] is not a valid pagination-size header value` on all
+   * three. Accepting it would only move the failure from here to an upstream 400.
+   */
+  it('refuses a size outside 1..500 before dispatching, -1 included', async () => {
     // Stubbed so that a *valid* call would succeed. Without that, the upstream failure
     // makes every call an error and the assertion proves nothing — which is exactly what
     // the first version of this test did.
     const { fetchImpl, requests } = stubFetch(() => ({ body: [] }));
     const { client, close } = await connect({ fetchImpl });
 
-    // The 500 ceiling stays: -1 is a documented sentinel, not an invitation to any integer.
-    for (const size of [0, -2, 501]) {
+    for (const size of [0, -1, -2, 501]) {
       const result = await client.callTool({
         name: 'eurodns_invoice_list',
         arguments: { size },

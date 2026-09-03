@@ -49,17 +49,29 @@ Every tool over a list endpoint takes four ordinary arguments — `page`, `size`
 and `sortOrder` — instead of the `pagination-*` headers the API expects. The server maps them
 back onto the headers.
 
-`size` accepts **`-1`**, which is the API's own request for every result in a single page.
-That is the cheapest way to pull a whole portfolio: one call instead of one per page, and no
-guessing at how many pages there are. Any other value must be between 1 and 500.
+`size` must be between **1 and 500**. There is no value meaning "everything": pulling a whole
+portfolio means walking pages.
 
-The catch is what comes back. A full inventory is easily hundreds of kilobytes, and
+That is worth stating plainly because the vendor's own OpenAPI document says otherwise. Three
+endpoints — `POST /domains/search`, `GET /zone-profiles` and `GET /tlds` — describe
+`pagination-size` as _"If pagination-size = -1, results are returned in one page"_. The API
+rejects `-1` on all three:
+
+```
+HTTP 400: [-1] is not a valid pagination-size header value.
+```
+
+while the same call with an explicit size answers `200`. This server therefore does not offer
+`-1`, and refuses it at the schema rather than letting it become a 400 nobody expected. If a
+future API version honours it, that is the moment to put it back — not before.
+
+The other constraint is what comes back. A full inventory is easily hundreds of kilobytes, and
 [`EURODNS_CHARACTER_LIMIT`](configuration.md) caps what one result may return — 25 000
 characters by default, which a large portfolio will exceed. Past that cap the server drops
 the indentation first and truncates only if that is still not enough, always with a notice
-saying how much was omitted. So `-1` is right for a caller that raised the limit to match,
-and wrong for one that did not: it will get the same truncation, having paid for the whole
-list upstream.
+saying how much was omitted. So a large `size` is right for a caller that raised the limit to
+match, and wrong for one that did not: it will get the same truncation, having paid for the
+whole page upstream. Prefer a filtered query to a wide one.
 
 ## Prompts, and what the server says it allows
 

@@ -1,5 +1,5 @@
 import type { Config } from './config.js';
-import { FORWARD_RECORD_TYPES, TTL_VALUES } from './constants.js';
+import { FORWARD_RECORD_TYPES, MAX_PAGE_SIZE, TTL_VALUES } from './constants.js';
 import { TAG_PREFIXES } from './tools/naming.js';
 
 /**
@@ -68,10 +68,11 @@ export function buildInstructions(config: Config): string {
       `and URL forwards, which carry different fields and are refused as records.`,
 
     `LISTING. List tools take page, size, sortField and sortOrder rather than pagination ` +
-      `headers. size accepts -1 for every result in one page. Results are capped at ` +
+      `headers. size is 1 to ${MAX_PAGE_SIZE}; there is no value meaning "everything", so ` +
+      `walk pages. Results are capped at ` +
       `${config.upstream.characterLimit.toLocaleString('en-US')} characters here — past that ` +
       `the server drops indentation first and truncates only if that is still not enough, ` +
-      `saying how much it omitted. On a large portfolio prefer a filtered query over -1.`,
+      `saying how much it omitted. On a large portfolio prefer a filtered query to paging.`,
 
     `ERRORS. A 403 from the API is almost always the calling host's public IP missing from the ` +
       `account's allowlist, not a bad credential. Report that rather than retrying or asking ` +

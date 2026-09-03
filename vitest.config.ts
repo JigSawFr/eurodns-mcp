@@ -26,7 +26,11 @@ export default defineConfig({
         // instructions, prompts, portfolio-cache and compatibility commits, whose every
         // branch is covered.
         branches: 86.7,
-        functions: 93.25,
+        // Down 0.07 from 93.25, and not because coverage got worse: the pagination fix
+        // deleted two fully covered callbacks from the portfolio cache. The eighteen
+        // uncovered functions are the same eighteen as before — entry points and signal
+        // handlers — so the ratio moved while the gap did not.
+        functions: 93.18,
         lines: 93.68,
       },
     },
