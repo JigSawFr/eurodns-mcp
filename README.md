@@ -33,8 +33,9 @@ domains, DNS zones, contacts, subscriptions, SSL, invoices and orders.
 - **Full API coverage** — 79 tools generated from the OpenAPI document, grouped into 16 areas.
 - **Three DNS workflow tools** that make record edits safe, because saving a zone replaces it.
 - **Guardrails** so a deployment can refuse operations that spend money or destroy things.
-- **Four prompts** for the workflows worth naming, and a resource that says what this
-  deployment allows — including why a tool you expected is not in the list.
+- **Four prompts** for the workflows worth naming, and **two resources**: the portfolio,
+  browsable, and one that says what this deployment allows — including why a tool you
+  expected is not in the list.
 - **Two transports** — `stdio` for a local client, streamable HTTP for a shared deployment.
 - **Both protocol eras on one endpoint** — speaks the 2026-07-28 revision natively and
   still serves 2025-era clients, which is most of them today.
@@ -109,6 +110,10 @@ To try it in a terminal first:
 npx -y @jigsawfr/eurodns-mcp
 ```
 
+Without credentials it still starts, lists every tool, prompt and resource, and refuses each
+call with a message naming the two variables — so a marketplace, or
+`npx @modelcontextprotocol/inspector`, can show the surface before you have a key.
+
 The package ships two commands: `eurodns-mcp` for stdio, which is the one above, and
 `eurodns-mcp-http` for the HTTP transport — reachable as
 `npx -p @jigsawfr/eurodns-mcp eurodns-mcp-http`.
@@ -136,7 +141,7 @@ ways around it.
 
 | Page                                     | What it covers                                                          |
 | ---------------------------------------- | ----------------------------------------------------------------------- |
-| [Tools](docs/tools.md)                   | All 82 tools, the prompts and the deployment resource                   |
+| [Tools](docs/tools.md)                   | All 83 tools, the prompts and the two resources                         |
 | [Guardrails](docs/guardrails.md)         | Risk classes, what a deployment can forbid, confirmation before a call  |
 | [Configuration](docs/configuration.md)   | Every environment variable, with its default                            |
 | [HTTP transport](docs/http-transport.md) | Serving several clients, static tokens, OAuth 2.1 and scopes            |

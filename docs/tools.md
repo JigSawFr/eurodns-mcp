@@ -1,7 +1,7 @@
 # Tools
 
-79 tools are generated from the OpenAPI document, plus three hand-written DNS workflow tools
-and, when enabled, the history query.
+79 tools are generated from the OpenAPI document, plus four hand-written tools — three DNS
+workflow tools and `eurodns_portfolio_refresh` — and, when enabled, the history query.
 
 | Area                 | Tools | Covers                                                      |
 | -------------------- | ----: | ----------------------------------------------------------- |
@@ -37,7 +37,9 @@ account.
 
 It is derived from the configuration rather than fixed, so it names the character limit **this**
 deployment enforces and the risk classes it hides — a hidden tool is absent rather than refused,
-and the block says which variable would bring it back. It runs to about 450 tokens, paid once
+and the block says which variable would bring it back. A server started without credentials
+(see [Configuration](configuration.md#credentials)) says that too, so the model reads the first
+refusal as a fact about the deployment rather than a fault to retry. It runs to about 450 tokens, paid once
 per session, and deliberately covers only what costs data to get wrong: the zone save that
 replaces everything, `rdata`, the TTL list, the pseudo record types, the shape of a listing
 call, and the fact that a `403` is an allowlist problem. Everything else lives in the tool
@@ -105,7 +107,8 @@ it on demand, for the one moment the TTL is wrong: just after registering a doma
 browsable: it lists every domain as something a client can open, and reading one returns its
 registry record. `eurodns://deployment` answers the question a hidden tool cannot: _why is it
 not here?_ It returns the guardrails in force, the risk classes hidden from the tool list with
-the variable that would restore each, the character limit and timeout, the authentication mode,
+the variable that would restore each, whether the process holds credentials at all
+(`credentials.configured`, a boolean), the character limit and timeout, the authentication mode,
 and whether history can be queried. It carries no credential and no address — not the
 application id, the API key, the token, or the upstream URL — and a test asserts that absence
 rather than the shape, so a field added later cannot quietly leak one.

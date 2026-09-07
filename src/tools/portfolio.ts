@@ -1,7 +1,9 @@
 import type { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import { evaluateGuardrails } from '../auth/scopes.js';
+import { UNCONFIGURED_MESSAGE } from '../services/errors.js';
 import { identityFrom } from './registry.js';
+import { NO_CREDENTIALS_REASON } from './failure.js';
 import { PORTFOLIO_REFRESH_TOOL_NAME } from './portfolioNames.js';
 import type { ToolContext } from './context.js';
 
@@ -52,6 +54,18 @@ export function registerPortfolioTools(server: McpServer, context: ToolContext):
         return {
           isError: true as const,
           content: [{ type: 'text' as const, text: decision.reason }],
+        };
+      }
+
+      // The one handler that checks this itself. Every other tool learns it from the client's
+      // refusal, but the cache swallows upstream failures on purpose, so without this the
+      // answer would be "0 domains cached" — which reads as an empty account, not as a server
+      // that cannot ask.
+      if (!context.client.hasCredentials()) {
+        span.complete({ verdict: 'denied', reason: NO_CREDENTIALS_REASON });
+        return {
+          isError: true as const,
+          content: [{ type: 'text' as const, text: UNCONFIGURED_MESSAGE }],
         };
       }
 

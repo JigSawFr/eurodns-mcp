@@ -1,8 +1,9 @@
-import type { UpstreamConfig } from '../config.js';
+import type { UpstreamConfig, UpstreamCredentials } from '../config.js';
 import { PAGINATION_HEADERS } from '../constants.js';
 import {
   EuroDnsApiError,
   EuroDnsTransportError,
+  EuroDnsUnconfiguredError,
   describeUpstreamError,
   extractErrors,
 } from './errors.js';
@@ -50,9 +51,22 @@ export class EuroDnsClient {
     this.fetchImpl = fetchImpl;
   }
 
+  /** For callers that hold a client and not the configuration it was built from. */
+  hasCredentials(): boolean {
+    return this.config.credentials !== undefined;
+  }
+
   async request<T = unknown>(options: RequestOptions): Promise<UpstreamResponse<T>> {
+    // The one place the refusal lives. Every upstream path goes through here, so "nothing is
+    // ever sent without credentials" is a property of this method rather than a promise kept
+    // by each handler — and a handler added later cannot forget it.
+    const credentials = this.config.credentials;
+    if (credentials === undefined) {
+      throw new EuroDnsUnconfiguredError(options.method, options.path);
+    }
+
     const url = this.buildUrl(options.path, options.query);
-    const headers = this.buildHeaders(options);
+    const headers = this.buildHeaders(options, credentials);
     const init: RequestInit = { method: options.method, headers };
 
     if (options.body !== undefined) {
@@ -147,11 +161,14 @@ export class EuroDnsClient {
     return url.toString();
   }
 
-  private buildHeaders(options: RequestOptions): Record<string, string> {
+  private buildHeaders(
+    options: RequestOptions,
+    credentials: UpstreamCredentials,
+  ): Record<string, string> {
     const headers: Record<string, string> = {
       // The API authenticates with two apiKey headers; there is no OAuth upstream.
-      'X-APP-ID': this.config.appId,
-      'X-API-KEY': this.config.apiKey,
+      'X-APP-ID': credentials.appId,
+      'X-API-KEY': credentials.apiKey,
       Accept: 'application/json',
       ...options.headers,
     };

@@ -1,4 +1,4 @@
-import type { Config } from './config.js';
+import { hasCredentials, type Config } from './config.js';
 import { FORWARD_RECORD_TYPES, MAX_PAGE_SIZE, TTL_VALUES } from './constants.js';
 import { TAG_PREFIXES } from './tools/naming.js';
 
@@ -84,6 +84,19 @@ export function buildInstructions(config: Config): string {
       `THIS DEPLOYMENT HIDES ${hidden.join(' and ')}. Those tools are absent from the list ` +
         `rather than refused, so do not offer them; the variable in parentheses is what an ` +
         `operator would change to restore each.`,
+    );
+  }
+
+  // The stdio-only state a server is in when it was started to be listed rather than used.
+  // Without this a model would take the first refusal as a fault to retry around, or ask the
+  // user for the very values that must never travel through the conversation.
+  if (!hasCredentials(config)) {
+    sections.push(
+      `THIS DEPLOYMENT HAS NO CREDENTIALS. EURODNS_APP_ID and EURODNS_API_KEY are both unset, ` +
+        `so every tool is listed and every call is refused with a message saying so; nothing ` +
+        `reaches the EuroDNS API. Do not retry, and do not ask the user to paste the ` +
+        `credentials into the conversation: the operator sets both in the environment of ` +
+        `the server process and restarts it.`,
     );
   }
 

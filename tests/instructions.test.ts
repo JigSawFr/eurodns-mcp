@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { connect, testConfig } from './harness.js';
+import { connect, testConfig, unconfiguredConfig } from './harness.js';
 import { buildInstructions } from '../src/instructions.js';
 import { TTL_VALUES } from '../src/constants.js';
 
@@ -51,6 +51,25 @@ describe('what the server tells a model about itself', () => {
     } finally {
       await close();
     }
+  });
+
+  /**
+   * A model told nothing takes the first refusal as a fault to retry around, or asks the user
+   * for the two values that must never travel through the conversation.
+   */
+  it('says when it holds no credentials, and only then', async () => {
+    const { client, close } = await connect({ config: unconfiguredConfig() });
+    try {
+      const instructions = client.getInstructions() ?? '';
+      expect(instructions).toContain('NO CREDENTIALS');
+      expect(instructions).toContain('EURODNS_APP_ID');
+      expect(instructions).toContain('EURODNS_API_KEY');
+    } finally {
+      await close();
+    }
+
+    // The configured briefing names neither variable anywhere, so a stray mention would show.
+    expect(buildInstructions(testConfig())).not.toContain('EURODNS_APP_ID');
   });
 
   it('says nothing about hiding when nothing is hidden', () => {

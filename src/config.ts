@@ -29,10 +29,21 @@ const intFromEnv = (fallback: number) =>
     .transform((v) => (v === undefined || v === '' ? fallback : Number(v)))
     .pipe(z.number().int().positive());
 
-/** Credentials and behaviour for the upstream EuroDNS API. */
-const upstreamSchema = z.object({
+/** The two headers the API authenticates with. Always both or neither, never one. */
+const credentialsSchema = z.object({
   appId: z.string().min(1, 'EURODNS_APP_ID is required'),
   apiKey: z.string().min(1, 'EURODNS_API_KEY is required'),
+});
+
+export type UpstreamCredentials = z.infer<typeof credentialsSchema>;
+
+/** Credentials and behaviour for the upstream EuroDNS API. */
+const upstreamSchema = z.object({
+  /**
+   * Absent only on stdio, and only when neither variable is set: the server then starts to
+   * be *listed*, not used. See `loadConfig` for why that is a mode rather than a mistake.
+   */
+  credentials: credentialsSchema.optional(),
   baseUrl: z.string().url().default(DEFAULT_BASE_URL),
   timeoutMs: z.number().int().positive(),
   maxRetries: z.number().int().nonnegative(),
@@ -203,6 +214,17 @@ export class ConfigError extends Error {
   }
 }
 
+/**
+ * Whether this process can call the API at all.
+ *
+ * One predicate for the three places that say so — the startup line, the handshake
+ * instructions and the deployment resource — on the same argument as `hiddenClasses`: a
+ * fact about the deployment that is stated in several places should be computed in one.
+ */
+export function hasCredentials(config: Config): boolean {
+  return config.upstream.credentials !== undefined;
+}
+
 function parseOrThrow<S extends z.ZodTypeAny>(
   schema: S,
   value: unknown,
@@ -219,19 +241,33 @@ function parseOrThrow<S extends z.ZodTypeAny>(
 /**
  * Builds the configuration from environment variables.
  *
- * `transport` matters for one reason: on stdio the process' stdout carries the JSON-RPC
- * stream, so writing the audit log there would corrupt every response. Asking for
- * `stdout` under stdio is refused rather than silently redirected.
+ * `transport` matters for two reasons. On stdio the process' stdout carries the JSON-RPC
+ * stream, so writing the audit log there would corrupt every response, and asking for
+ * `stdout` there is refused rather than silently redirected. And on stdio alone, a process
+ * with *neither* credential is allowed to start — see `credentials` below.
  */
 export function loadConfig(
   env: NodeJS.ProcessEnv = process.env,
   transport: 'stdio' | 'http' = 'stdio',
 ): Config {
+  const appId = env.EURODNS_APP_ID ?? '';
+  const apiKey = env.EURODNS_API_KEY ?? '';
+
+  // Both absent on stdio is a mode, not a mistake. Marketplaces and validators enumerate a
+  // server by spawning its command with no environment at all, and a process that exits 78
+  // there is catalogued as having no tools, no prompts and no resources — which is what
+  // happened. Started this way the server advertises everything and refuses every call
+  // (see `EuroDnsClient.request`). HTTP has no such caller, and one credential without the
+  // other is a typo on either transport, so both of those still stop the process.
+  const credentials =
+    transport === 'stdio' && appId === '' && apiKey === ''
+      ? undefined
+      : parseOrThrow(credentialsSchema, { appId, apiKey }, 'upstream');
+
   const upstream = parseOrThrow(
     upstreamSchema,
     {
-      appId: env.EURODNS_APP_ID ?? '',
-      apiKey: env.EURODNS_API_KEY ?? '',
+      credentials,
       baseUrl: env.EURODNS_BASE_URL || DEFAULT_BASE_URL,
       timeoutMs: parseOrThrow(intFromEnv(DEFAULT_TIMEOUT_MS), env.EURODNS_TIMEOUT_MS, 'timeout'),
       maxRetries: parseOrThrow(

@@ -1,8 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { PortfolioCache } from '../src/services/portfolio.js';
 import { EuroDnsClient, type FetchLike } from '../src/services/client.js';
 import { loadConfig } from '../src/config.js';
-import { connect, isError, stubFetch, testConfig } from './harness.js';
+import { connect, isError, stubFetch, testConfig, unconfiguredConfig } from './harness.js';
 import { DOMAIN_RESOURCE_TEMPLATE } from '../src/resources.js';
 import { MAX_PAGE_SIZE } from '../src/constants.js';
 
@@ -131,6 +131,30 @@ describe('the cached domain list', () => {
     const cache = new PortfolioCache({ ttlMs: 60_000, maxEntries: 100 });
 
     await expect(cache.complete(client, 'anything')).resolves.toEqual([]);
+  });
+
+  /**
+   * Without credentials every lookup would fail, and the failure path warns on stderr — once
+   * per keystroke, on a server that only exists to be listed. The empty answer alone proves
+   * nothing here, because the client's own refusal produces it too; the silence is the test.
+   */
+  it('asks nothing and says nothing when the client holds no credentials', async () => {
+    let calls = 0;
+    const client = new EuroDnsClient(unconfiguredConfig().upstream, async () => {
+      calls += 1;
+      return new Response('[]', { status: 200, headers: { 'content-type': 'application/json' } });
+    });
+    const cache = new PortfolioCache({ ttlMs: 60_000, maxEntries: 100 });
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      expect(await cache.list(client)).toEqual([]);
+      expect(await cache.complete(client, 'a')).toEqual([]);
+      expect(calls).toBe(0);
+      expect(stderr).not.toHaveBeenCalled();
+    } finally {
+      stderr.mockRestore();
+    }
   });
 
   /** A failed refresh must not wedge every later caller onto the rejected promise. */

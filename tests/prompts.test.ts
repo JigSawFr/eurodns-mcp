@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { connect, testConfig } from './harness.js';
+import { connect, testConfig, unconfiguredConfig } from './harness.js';
 import { DEPLOYMENT_RESOURCE_URI } from '../src/resources.js';
 import { TTL_VALUES } from '../src/constants.js';
 import { AUDIT_QUERY_TOOL_NAME } from '../src/tools/auditNames.js';
@@ -176,6 +176,25 @@ describe('what this deployment says it allows', () => {
     } finally {
       await close();
     }
+  });
+
+  /**
+   * A client explaining a refusal needs to know whether the process can call the API at all,
+   * and needs nothing more than that — the leak test below keeps it to the boolean.
+   */
+  it('reports whether it holds credentials, as a boolean', async () => {
+    const read = async (config: ReturnType<typeof testConfig>) => {
+      const { client, close } = await connect({ config });
+      try {
+        const result = await client.readResource({ uri: DEPLOYMENT_RESOURCE_URI });
+        return JSON.parse((result.contents[0] as { text: string }).text);
+      } finally {
+        await close();
+      }
+    };
+
+    expect((await read(testConfig())).credentials).toEqual({ configured: true });
+    expect((await read(unconfiguredConfig())).credentials).toEqual({ configured: false });
   });
 
   /**
