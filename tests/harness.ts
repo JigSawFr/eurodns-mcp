@@ -70,6 +70,15 @@ export function testConfig(overrides: Record<string, string> = {}): Config {
   );
 }
 
+/**
+ * The configuration a marketplace or validator produces: the stdio command spawned with no
+ * credentials at all. Empty strings rather than absent keys, because `EURODNS_APP_ID=` on a
+ * command line is the same absence and the harness would otherwise put the test values back.
+ */
+export function unconfiguredConfig(overrides: Record<string, string> = {}): Config {
+  return testConfig({ EURODNS_APP_ID: '', EURODNS_API_KEY: '', ...overrides });
+}
+
 /** Connects a real MCP client to a real server over an in-memory transport pair. */
 export async function connect(
   options: {

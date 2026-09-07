@@ -46,6 +46,37 @@ export class EuroDnsTransportError extends Error {
 }
 
 /**
+ * What a caller is told when the process holds no credentials.
+ *
+ * Written for the model that reads it in a tool result: it says that nothing was sent, what
+ * the operator has to do, and that the tool list is still real — so it does not retry, and
+ * does not conclude that the account is empty or the server broken.
+ */
+export const UNCONFIGURED_MESSAGE =
+  'Nothing was sent to the EuroDNS API: this server was started without credentials. Set ' +
+  'EURODNS_APP_ID and EURODNS_API_KEY in the environment of the server process and restart ' +
+  'it. Every tool is listed; none can run until then.';
+
+/**
+ * Raised before any request is built when the process was started without credentials.
+ *
+ * Only the stdio transport can be in this state (see `loadConfig`). The throw sits ahead of
+ * URL and header construction on purpose: not even a request that would come back 401 leaves
+ * the process, so a server started to be listed never touches the network.
+ */
+export class EuroDnsUnconfiguredError extends Error {
+  readonly method: string;
+  readonly path: string;
+
+  constructor(method: string, path: string) {
+    super(UNCONFIGURED_MESSAGE);
+    this.name = 'EuroDnsUnconfiguredError';
+    this.method = method;
+    this.path = path;
+  }
+}
+
+/**
  * Turns an upstream failure into a message an agent can act on.
  *
  * The API's own titles are terse and sometimes generic ("Unexpected technical error"), so

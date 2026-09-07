@@ -1,10 +1,13 @@
 import type { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import { evaluateGuardrails } from '../auth/scopes.js';
+import type { UpstreamResponse } from '../services/client.js';
 import { formatJson } from '../services/format.js';
 import { identityFrom } from './registry.js';
+import { failureMessage, failureOutcome } from './failure.js';
 import { COMPAT_FETCH_TOOL_NAME, COMPAT_SEARCH_TOOL_NAME } from './compatNames.js';
 import type { ToolContext } from './context.js';
+import type { AuditSpan } from '../audit.js';
 import { MAX_PAGE_SIZE } from '../constants.js';
 
 /**
@@ -87,12 +90,17 @@ function registerSearch(server: McpServer, context: ToolContext): void {
       // One page, not `size: -1`: the vendor documents that sentinel on this endpoint and the
       // API rejects it (see MAX_PAGE_SIZE). A single page is no loss here — a result set
       // larger than this is truncated by the character limit long before it reaches a client.
-      const response = await context.client.request<SearchedDomain[]>({
-        method: 'POST',
-        path: '/domains/search',
-        body: { term: args.query },
-        pagination: { size: MAX_PAGE_SIZE },
-      });
+      let response: UpstreamResponse<SearchedDomain[]>;
+      try {
+        response = await context.client.request<SearchedDomain[]>({
+          method: 'POST',
+          path: '/domains/search',
+          body: { term: args.query },
+          pagination: { size: MAX_PAGE_SIZE },
+        });
+      } catch (error) {
+        return upstreamFailure(gate.span, error, 'Could not search this account’s domains.');
+      }
 
       const results = (Array.isArray(response.data) ? response.data : [])
         .filter(
@@ -139,10 +147,15 @@ function registerFetch(server: McpServer, context: ToolContext): void {
       const gate = beginRead(context, ctx?.http?.authInfo, COMPAT_FETCH_TOOL_NAME, args.id);
       if (gate.refusal) return gate.refusal;
 
-      const response = await context.client.request<Record<string, unknown>>({
-        method: 'GET',
-        path: `/domains/${encodeURIComponent(args.id)}`,
-      });
+      let response: UpstreamResponse<Record<string, unknown>>;
+      try {
+        response = await context.client.request<Record<string, unknown>>({
+          method: 'GET',
+          path: `/domains/${encodeURIComponent(args.id)}`,
+        });
+      } catch (error) {
+        return upstreamFailure(gate.span, error, 'Could not fetch that domain.');
+      }
 
       // No `url`. The contract makes it optional, and this account's domains have no public
       // address to cite — inventing one would put a link in a citation that resolves to
@@ -192,4 +205,20 @@ function beginRead(
 function render(context: ToolContext, value: Record<string, unknown>) {
   const rendered = formatJson(value, context.config.upstream.characterLimit);
   return { content: [{ type: 'text' as const, text: rendered.text }], structuredContent: value };
+}
+
+/**
+ * An upstream failure recorded, then answered.
+ *
+ * Left uncaught, a rejected request here still reached the client as an `isError` result —
+ * the SDK does that for anything a handler throws — but the audit span was never completed,
+ * so a `search` that failed upstream was the one call in the log with no verdict. The
+ * generated and DNS tools already close theirs; this brings the pair in line.
+ */
+function upstreamFailure(span: AuditSpan, error: unknown, fallback: string) {
+  span.complete(failureOutcome(error));
+  return {
+    isError: true as const,
+    content: [{ type: 'text' as const, text: failureMessage(error, fallback) }],
+  };
 }

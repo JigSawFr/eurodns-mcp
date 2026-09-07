@@ -7,7 +7,9 @@ Two rules hold throughout:
 
 - **Every value is validated at startup, and a bad one stops the process** with exit code
   `78` (`EX_CONFIG`) and a message naming the variable. A server that starts with a setting
-  it did not understand is worse than one that refuses to start.
+  it did not understand is worse than one that refuses to start. The one deliberate
+  exception is the stdio server with _neither_ credential set, which starts in a
+  listing-only state — see [Credentials](#credentials).
 - **Any `EURODNS_*` variable may hold an `op://vault/item/field` reference** instead of a
   literal, resolved once at startup through 1Password Connect. See
   [Secrets](secrets.md).
@@ -16,12 +18,22 @@ Two rules hold throughout:
 
 ### `EURODNS_APP_ID` · `EURODNS_API_KEY`
 
-**Required, both.** The Application ID and API key created in the EuroDNS dashboard under
-API access. Missing either stops the process:
+**Required to call the API, both.** The Application ID and API key created in the EuroDNS
+dashboard under API access. Missing one of the two stops the process, on either transport:
 
 ```
-Invalid configuration — appId: EURODNS_APP_ID is required; apiKey: EURODNS_API_KEY is required
+Invalid configuration — appId: EURODNS_APP_ID is required
 ```
+
+Missing **both** is read differently, and only on stdio: the server starts, advertises every
+tool, prompt and resource, and refuses each call with a message naming the two variables.
+Nothing is sent to the API — not even a request that would come back `401`. This exists for
+marketplaces and validators, which enumerate a server by spawning its command with no
+environment at all; a process that exits there is catalogued as having no tools. The state
+is visible three ways: the startup line ends in `without credentials`, the handshake
+instructions carry a `THIS DEPLOYMENT HAS NO CREDENTIALS` section, and the
+`eurodns://deployment` resource reports `credentials.configured: false`. Over HTTP, where no
+such caller exists, missing both stops the process like missing one.
 
 ```bash
 EURODNS_APP_ID=your-application-id
@@ -140,7 +152,7 @@ create a charge or extend a paid term.
 Default off, meaning irreversible tools are **hidden**. Set true to advertise operations that
 destroy something outside DNS zone data.
 
-> Both default to off, which is why a default deployment advertises **63** of the 82 tools.
+> Both default to off, which is why a default deployment advertises **64** of the 83 tools.
 > The startup line names each hidden class and the variable that reveals it.
 
 ### `EURODNS_CONFIRM`

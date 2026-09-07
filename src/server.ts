@@ -2,7 +2,7 @@ import { McpServer } from '@modelcontextprotocol/server';
 import { createRequire } from 'node:module';
 import { userInfo } from 'node:os';
 import { AuditLogger, type AuditActor } from './audit.js';
-import type { Config } from './config.js';
+import { hasCredentials, type Config } from './config.js';
 import { EuroDnsClient, type FetchLike } from './services/client.js';
 import { registerAuditTools } from './tools/audit.js';
 import { registerDnsTools } from './tools/dns.js';
@@ -113,13 +113,19 @@ export function startupLine(options: {
   endpoint?: { url: string; authMode: string };
 }): string {
   const hidden = hiddenClasses(options.config);
+  // Said here as well as to the model: from the client's side a server that lists every tool
+  // and refuses every call looks broken, and stderr is where the operator looks first.
+  const credentials = hasCredentials(options.config)
+    ? ''
+    : ', without credentials — EURODNS_APP_ID and EURODNS_API_KEY are unset, so every call ' +
+      'is refused';
   const where = options.endpoint
     ? `listening on ${options.endpoint.url} (auth: ${options.endpoint.authMode}, ` +
       `${options.toolCount} tools${hidden.length ? `, hidden: ${hidden.join(', ')}` : ''})`
     : `ready on stdio with ${options.toolCount} tools` +
       `${hidden.length ? ` (hidden: ${hidden.join(', ')})` : ''}`;
 
-  return `${SERVER_NAME} ${SERVER_VERSION} ${where}`;
+  return `${SERVER_NAME} ${SERVER_VERSION} ${where}${credentials}`;
 }
 
 export interface BuiltServer {

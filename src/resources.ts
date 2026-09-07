@@ -1,5 +1,5 @@
 import { ResourceTemplate, type McpServer } from '@modelcontextprotocol/server';
-import type { Config } from './config.js';
+import { hasCredentials, type Config } from './config.js';
 import { NATIVE_PROTOCOL_REVISION, TOOL_LIST_CACHE_MS } from './constants.js';
 import { hiddenClasses } from './instructions.js';
 import { auditQueryAvailable } from './tools/audit.js';
@@ -39,6 +39,9 @@ export function deploymentState(config: Config) {
       // Each entry names the class and, in parentheses, the variable that would restore it.
       hidden: hiddenClasses(config),
     },
+    // A boolean and nothing more — the contract of this resource is that no credential is in
+    // it, and the value of one is exactly what a client would need to explain a refusal.
+    credentials: { configured: hasCredentials(config) },
     limits: {
       characterLimit: upstream.characterLimit,
       // Not a guardrail, but the other number that decides whether a plan is realistic.
@@ -64,8 +67,9 @@ export function registerResources(server: McpServer, context: ToolContext): numb
       title: 'What this deployment allows',
       description:
         'The guardrails in force, the risk classes hidden from the tool list and the ' +
-        'variable that would restore each, the result size limit, and whether history can ' +
-        'be queried. Read this to explain why an expected tool is absent.',
+        'variable that would restore each, whether the process holds credentials at all, ' +
+        'the result size limit, and whether history can be queried. Read this to explain ' +
+        'why an expected tool is absent, or why every call is refused.',
       mimeType: 'application/json',
       // Same argument as the tool list: this changes only when the process restarts.
       cacheHint: { ttlMs: TOOL_LIST_CACHE_MS, cacheScope: 'public' },

@@ -1,8 +1,8 @@
 import type { McpServer, AuthInfo } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import { evaluateGuardrails } from '../auth/scopes.js';
-import { EuroDnsApiError, EuroDnsTransportError } from '../services/errors.js';
 import { formatJson } from '../services/format.js';
+import { failureMessage, failureOutcome } from './failure.js';
 import {
   RecordInputSchema,
   RecordTypeSchema,
@@ -40,27 +40,15 @@ function jsonResult(context: ToolContext, value: Record<string, unknown>) {
   return { content: [{ type: 'text' as const, text: rendered.text }], structuredContent: value };
 }
 
-function failureMessage(error: unknown, fallback: string): string {
-  return error instanceof EuroDnsApiError || error instanceof EuroDnsTransportError
-    ? error.message
-    : fallback;
-}
-
 /**
  * Records an upstream failure, and turns it into the caller's answer.
  *
- * The three DNS tools each had these eight lines, identical but for the fallback message.
- * The status is lifted out of the error where there is one: a `failed` audit line that
- * cannot say whether the API answered 403 or the request timed out is much less use when
- * the log is read back, and that is the whole point of keeping it.
+ * The three DNS tools each had these lines, identical but for the fallback message; the
+ * mapping itself now lives in `failure.ts`, shared with the generated tools, so the audit
+ * line here carries the same status and reason a generated tool's would.
  */
 function upstreamFailure(span: AuditSpan, error: unknown, fallback: string) {
-  const status = error instanceof EuroDnsApiError ? error.status : undefined;
-  span.complete({
-    verdict: 'failed',
-    ...(status === undefined ? {} : { upstreamStatus: status }),
-    reason: 'upstream error',
-  });
+  span.complete(failureOutcome(error));
   return textResult(failureMessage(error, fallback), true);
 }
 

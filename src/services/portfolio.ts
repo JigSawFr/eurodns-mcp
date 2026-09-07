@@ -96,6 +96,12 @@ export class PortfolioCache {
    * every later caller onto a rejected promise.
    */
   private fetchOnce(client: EuroDnsClient): Promise<string[]> {
+    // Started without credentials there is nothing to fetch and nothing worth saying:
+    // completion is typed into, so the warning in `fetchNames` would otherwise be written
+    // once per keystroke on a server that only exists to be listed. Nothing is cached either,
+    // so the first call after a restart with credentials fetches as it always did.
+    if (!client.hasCredentials()) return Promise.resolve([]);
+
     this.inFlight ??= this.fetchNames(client).finally(() => {
       this.inFlight = undefined;
     });

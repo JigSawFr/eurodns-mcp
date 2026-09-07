@@ -1,11 +1,28 @@
 import { describe, expect, it } from 'vitest';
 import { EuroDnsClient } from '../src/services/client.js';
 import { EuroDnsApiError } from '../src/services/errors.js';
-import { stubFetch, testConfig } from './harness.js';
+import { stubFetch, testConfig, unconfiguredConfig } from './harness.js';
 
 const upstream = testConfig().upstream;
 
 describe('EuroDNS client', () => {
+  /**
+   * The one place the refusal lives, so the one test that proves it. The stub would answer
+   * 200: were the guard removed, the call would succeed and the request would be recorded.
+   */
+  it('refuses to build a request without credentials, before touching fetch', async () => {
+    const { fetchImpl, requests } = stubFetch(() => ({ body: { ok: true } }));
+    const client = new EuroDnsClient(unconfiguredConfig().upstream, fetchImpl);
+
+    expect(client.hasCredentials()).toBe(false);
+    await expect(client.request({ method: 'GET', path: '/tlds' })).rejects.toMatchObject({
+      name: 'EuroDnsUnconfiguredError',
+      method: 'GET',
+      path: '/tlds',
+    });
+    expect(requests).toHaveLength(0);
+  });
+
   it('authenticates with the two apiKey headers the API expects', async () => {
     const { fetchImpl, requests } = stubFetch(() => ({ body: { ok: true } }));
     await new EuroDnsClient(upstream, fetchImpl).request({ method: 'GET', path: '/tlds' });

@@ -18,6 +18,25 @@ describe('what the configuration refuses', () => {
   it('needs both credentials, and names the one that is missing', () => {
     expect(() => loadConfig({ EURODNS_API_KEY: 'key' }, 'stdio')).toThrow(/EURODNS_APP_ID/);
     expect(() => loadConfig({ EURODNS_APP_ID: 'app' }, 'stdio')).toThrow(/EURODNS_API_KEY/);
+    // One without the other is a typo on either transport; listing mode must not soften it.
+    expect(() => loadConfig({ EURODNS_API_KEY: 'key' }, 'http')).toThrow(/EURODNS_APP_ID/);
+    expect(() => loadConfig({ EURODNS_APP_ID: 'app' }, 'http')).toThrow(/EURODNS_API_KEY/);
+  });
+
+  /**
+   * Marketplaces and validators spawn the stdio command with no environment at all. A process
+   * that exits there is catalogued as having no tools, no prompts and no resources — which is
+   * what happened. HTTP has no such caller, so it keeps refusing.
+   */
+  it('starts with neither credential on stdio, and refuses to over HTTP', () => {
+    expect(loadConfig({}, 'stdio').upstream.credentials).toBeUndefined();
+    // `EURODNS_APP_ID= EURODNS_API_KEY=` on a command line is the same absence.
+    expect(
+      loadConfig({ EURODNS_APP_ID: '', EURODNS_API_KEY: '' }, 'stdio').upstream.credentials,
+    ).toBeUndefined();
+    expect(loadConfig(base, 'stdio').upstream.credentials).toEqual({ appId: 'app', apiKey: 'key' });
+
+    expect(() => loadConfig({}, 'http')).toThrow(/EURODNS_APP_ID[\s\S]*EURODNS_API_KEY/);
   });
 
   it('rejects a boolean spelling it does not know, rather than reading it as false', () => {
@@ -253,6 +272,21 @@ describe('the line an operator sees at startup', () => {
     expect(listening).toContain('auth: token');
 
     expect(startupLine({ config: config(), toolCount: 63 })).toContain('ready on stdio');
+  });
+
+  /**
+   * From the client's side a server that lists every tool and refuses every call looks
+   * broken. The operator's line is where they look first, so it has to say why.
+   */
+  it('says every call will be refused when it holds no credentials', () => {
+    const line = startupLine({ config: loadConfig({}, 'stdio'), toolCount: 64 });
+    expect(line).toContain('64 tools');
+    expect(line).toContain('EURODNS_APP_ID');
+    expect(line).toContain('EURODNS_API_KEY');
+    expect(line).toContain('refused');
+
+    // And nothing of the sort on a configured one, where it would read as an alarm.
+    expect(startupLine({ config: config(), toolCount: 64 })).not.toContain('EURODNS_APP_ID');
   });
 });
 

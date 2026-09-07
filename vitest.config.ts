@@ -19,19 +19,21 @@ export default defineConfig({
       // why. What is not a move is deleting a test to make the ratio work, or nudging the
       // floor down as a reflex — at that point the number stops meaning anything.
       thresholds: {
-        statements: 92.72,
+        // Up 0.28 from 92.72 with the credential-less listing mode, whose every statement
+        // is exercised — the refusal, the three surfaces that report it, and the shared
+        // failure mapping that replaced two inline copies.
+        statements: 93,
         // Branches sit below the rest because three `??` fallbacks in server.ts guard a
         // `createRequire` that only fails in a layout this package does not produce. Up
-        // 1.59 from 85.11 across the role-intersection, result-rendering, handshake-
-        // instructions, prompts, portfolio-cache and compatibility commits, whose every
-        // branch is covered.
-        branches: 86.7,
-        // Down 0.07 from 93.25, and not because coverage got worse: the pagination fix
-        // deleted two fully covered callbacks from the portfolio cache. The eighteen
-        // uncovered functions are the same eighteen as before — entry points and signal
-        // handlers — so the ratio moved while the gap did not.
-        functions: 93.18,
-        lines: 93.68,
+        // 0.81 from 86.7 with the same change: the compat catch and the portfolio
+        // pre-check are new branches, both covered.
+        branches: 87.51,
+        // Up 0.12 from 93.18: `hasCredentials` twice over, the new error class and the two
+        // failure helpers are all called; the DNS tools lost one local function to the
+        // shared helper. The eighteen uncovered functions are still entry points and
+        // signal handlers.
+        functions: 93.3,
+        lines: 93.93,
       },
     },
   },

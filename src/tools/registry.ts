@@ -11,8 +11,8 @@ import {
   type GeneratedParameter,
 } from '../generated/operations.js';
 import { evaluateGuardrails, scopeForRisk } from '../auth/scopes.js';
-import { EuroDnsApiError, EuroDnsTransportError } from '../services/errors.js';
 import { formatJson, redactForAudit } from '../services/format.js';
+import { failureMessage, failureOutcome } from './failure.js';
 import { toolNameFor } from './naming.js';
 import { describeOperation } from './overrides.js';
 import type { CallerIdentity, ToolContext } from './context.js';
@@ -403,20 +403,10 @@ function registerOperation(
           structuredContent: structured,
         };
       } catch (error) {
-        const status = error instanceof EuroDnsApiError ? error.status : undefined;
-        const message =
-          error instanceof EuroDnsApiError || error instanceof EuroDnsTransportError
-            ? error.message
-            : `Unexpected failure calling ${operation.operationId}.`;
-        span.complete({
-          verdict: 'failed',
-          ...(status === undefined ? {} : { upstreamStatus: status }),
-          reason:
-            error instanceof EuroDnsApiError
-              ? error.codes.join(',') || `HTTP ${status}`
-              : 'transport',
-        });
-        return errorResult(message);
+        span.complete(failureOutcome(error));
+        return errorResult(
+          failureMessage(error, `Unexpected failure calling ${operation.operationId}.`),
+        );
       }
     },
   );

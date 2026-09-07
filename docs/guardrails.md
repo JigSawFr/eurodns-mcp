@@ -12,7 +12,7 @@ Every operation is classified by what it can cost you. Two gates apply, and both
 
 **A disabled class is not advertised at all**, the same way `EURODNS_READ_ONLY=true` hides
 every state-changing tool. A surface that lists tools which can only ever answer "this is
-disabled" misdescribes the deployment. The default therefore advertises **63** of the 82
+disabled" misdescribes the deployment. The default therefore advertises **64** of the 83
 tools; the startup line names which classes are hidden and the variable that would reveal
 each one.
 
