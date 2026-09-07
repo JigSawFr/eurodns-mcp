@@ -13,6 +13,8 @@ domains, DNS zones, contacts, subscriptions, SSL, invoices and orders.
 [![MCP](https://img.shields.io/badge/MCP-2026--07--28-8A63D2.svg)](https://modelcontextprotocol.io/specification/2026-07-28)
 [![npm](https://img.shields.io/npm/v/%40jigsawfr%2Feurodns-mcp.svg?color=CB3837&logo=npm)](https://www.npmjs.com/package/@jigsawfr/eurodns-mcp)
 [![Image](https://img.shields.io/badge/ghcr.io-eurodns--mcp-2496ED.svg)](https://github.com/JigSawFr/eurodns-mcp/pkgs/container/eurodns-mcp)
+[![MCP Badge](https://lobehub.com/badge/mcp/jigsawfr-eurodns-mcp)](https://lobehub.com/mcp/jigsawfr-eurodns-mcp)
+[![eurodns-mcp MCP server](https://glama.ai/mcp/servers/JigSawFr/eurodns-mcp/badges/score.svg)](https://glama.ai/mcp/servers/JigSawFr/eurodns-mcp)
 
 **[Documentation](docs/README.md)** · [Tools](docs/tools.md) · [Guardrails](docs/guardrails.md) · [Deploying](deploy/README.md)
 
