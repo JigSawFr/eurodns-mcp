@@ -6,7 +6,7 @@ import { hasCredentials, type Config } from './config.js';
 import { EuroDnsClient, type FetchLike } from './services/client.js';
 import { registerAuditTools } from './tools/audit.js';
 import { registerDnsTools } from './tools/dns.js';
-import { registerGeneratedTools } from './tools/registry.js';
+import { registerCompositeTools, registerGeneratedTools } from './tools/registry.js';
 import { registerPortfolioTools } from './tools/portfolio.js';
 import { registerCompatTools } from './tools/compat.js';
 import type { ToolContext } from './tools/context.js';
@@ -178,6 +178,7 @@ export function buildServer(options: BuildOptions): BuiltServer {
   };
 
   const generated = registerGeneratedTools(server, context);
+  const composites = registerCompositeTools(server, context);
   const dns = registerDnsTools(server, context);
   const audit = registerAuditTools(server, context);
   const portfolio = registerPortfolioTools(server, context);
@@ -188,7 +189,7 @@ export function buildServer(options: BuildOptions): BuiltServer {
   return {
     server,
     context,
-    toolCount: generated + dns + audit + portfolio + compat,
+    toolCount: generated + composites + dns + audit + portfolio + compat,
     promptCount: prompts,
     resourceCount: resources,
   };

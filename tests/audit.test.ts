@@ -164,7 +164,7 @@ describe('audit log', () => {
       fetchImpl,
     });
 
-    await client.callTool({ name: 'eurodns_tld_list', arguments: {} });
+    await client.callTool({ name: 'eurodns_tld_get', arguments: {} });
     await close();
 
     const lines = readLines(file);
@@ -208,7 +208,7 @@ describe('audit log', () => {
       fetchImpl,
     });
 
-    await client.callTool({ name: 'eurodns_tld_list', arguments: {} });
+    await client.callTool({ name: 'eurodns_tld_get', arguments: {} });
     await close();
 
     // This file attributes DNS changes to people; other accounts on the host have no
@@ -356,7 +356,7 @@ describe('audit log', () => {
             jsonrpc: '2.0',
             id: 1,
             method: 'tools/call',
-            params: { name: 'eurodns_tld_list', arguments: {} },
+            params: { name: 'eurodns_tld_get', arguments: {} },
           });
       }
 

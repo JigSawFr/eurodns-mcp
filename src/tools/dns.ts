@@ -267,21 +267,44 @@ function registerDeleteRecord(server: McpServer, context: ToolContext): void {
     {
       title: 'Delete a DNS record',
       description:
-        'Deletes a DNS record identified by type and host, resolving its internal id from the ' +
-        'zone first. Give rdata as well when several records share a type and host. Refuses ' +
-        'to act when the selection is ambiguous rather than guessing.',
-      inputSchema: z.object({
-        domainName: z.string().describe('Zone to modify, e.g. example.com.'),
-        type: RecordTypeSchema.describe('Record type of the record to delete.'),
-        host: z.string().describe('Node the record applies to. Use "" or "@" for the apex.'),
-        rdata: z.string().optional().describe('Exact current value, to disambiguate.'),
-      }),
+        'Deletes one DNS record from a zone, either by its numeric recordId or by type and ' +
+        'host, resolving the id from the live zone in the second case. Give rdata as well when ' +
+        'several records share a type and host: an ambiguous selection is refused rather than ' +
+        'guessed. Read the zone first with eurodns_dns_get_zone to see what it holds.',
+      inputSchema: z
+        .object({
+          domainName: z.string().describe('Zone to modify, e.g. example.com.'),
+          recordId: z
+            .number()
+            .int()
+            .optional()
+            .describe(
+              'Numeric id of the record, from the records eurodns_dns_get_zone returns. When ' +
+                'given, type and host are not needed.',
+            ),
+          type: RecordTypeSchema.optional().describe(
+            'Record type of the record to delete, e.g. A, CNAME, TXT. Required without recordId.',
+          ),
+          host: z
+            .string()
+            .optional()
+            .describe(
+              'Node the record applies to. Use "" or "@" for the apex. Required without recordId.',
+            ),
+          rdata: z.string().optional().describe('Exact current value, to disambiguate.'),
+        })
+        .refine(
+          (args) =>
+            args.recordId !== undefined || (args.type !== undefined && args.host !== undefined),
+          { message: 'Give either recordId, or both type and host.' },
+        ),
       outputSchema: z.object({
         deleted: z.object({
           id: z.number(),
-          type: z.string(),
-          host: z.string(),
-          rdata: z.string(),
+          // Absent when the record was named by id: nothing was read to learn them.
+          type: z.string().optional(),
+          host: z.string().optional(),
+          rdata: z.string().optional(),
         }),
         zone: z.string(),
       }),
@@ -297,7 +320,7 @@ function registerDeleteRecord(server: McpServer, context: ToolContext): void {
         tool: name,
         risk: 'write',
         target: args.domainName,
-        params: { type: args.type, host: args.host },
+        params: { recordId: args.recordId, type: args.type, host: args.host },
       });
 
       // Kept although the HTTP scope gate already refuses this before dispatch: it is the
@@ -308,7 +331,28 @@ function registerDeleteRecord(server: McpServer, context: ToolContext): void {
         return textResult(decision.reason, true);
       }
 
-      const pseudo = rejectForwardPseudoType(args.type);
+      // By id: the raw endpoint, for a caller that has just read the zone and holds the id.
+      // No lookup, so no locked-record check either — the API refuses those itself.
+      if (args.recordId !== undefined) {
+        try {
+          const response = await context.client.request({
+            method: 'DELETE',
+            path: `/dns-zones/${encodeURIComponent(args.domainName)}/dns-records/${args.recordId}`,
+          });
+          span.complete({ verdict: 'allowed', upstreamStatus: response.status });
+          return jsonResult(context, { deleted: { id: args.recordId }, zone: args.domainName });
+        } catch (error) {
+          return upstreamFailure(span, error, `Could not delete the record in ${args.domainName}.`);
+        }
+      }
+
+      // The schema's refinement requires the pair whenever recordId is absent, and the SDK
+      // validates before dispatch — so this is a statement of what was already checked, not a
+      // check. A guard here would be a branch no call can reach.
+      const type = args.type as string;
+      const host = args.host as string;
+
+      const pseudo = rejectForwardPseudoType(type);
       if (pseudo) {
         span.complete({ verdict: 'denied', reason: 'forward pseudo type' });
         return textResult(pseudo, true);
@@ -318,14 +362,14 @@ function registerDeleteRecord(server: McpServer, context: ToolContext): void {
         const zone = await readZone(context, args.domainName);
         const matches = (zone.records ?? []).filter(
           (record) =>
-            sameRecordKey(record, { type: args.type, host: args.host }) &&
+            sameRecordKey(record, { type, host }) &&
             (args.rdata === undefined || record.rdata === args.rdata),
         );
 
         if (matches.length === 0) {
           span.complete({ verdict: 'denied', reason: 'no match' });
           return textResult(
-            `No ${args.type} record for "${args.host}" in ${args.domainName}. Read the zone to ` +
+            `No ${type} record for "${host}" in ${args.domainName}. Read the zone to ` +
               'see what it currently holds.',
             true,
           );
@@ -335,7 +379,7 @@ function registerDeleteRecord(server: McpServer, context: ToolContext): void {
           span.complete({ verdict: 'denied', reason: 'ambiguous match' });
           const values = matches.map((record) => record.rdata ?? '');
           return textResult(
-            `${matches.length} ${args.type} records share host "${args.host}" in ` +
+            `${matches.length} ${type} records share host "${host}" in ` +
               `${args.domainName}. Pass rdata to choose one of: ${values.join(', ')}.`,
             true,
           );
@@ -364,7 +408,7 @@ function registerDeleteRecord(server: McpServer, context: ToolContext): void {
         return jsonResult(context, {
           deleted: {
             id: target.id,
-            type: target.type ?? args.type,
+            type: target.type ?? type,
             host: normalizeHost(target.host),
             rdata: target.rdata ?? '',
           },
@@ -385,8 +429,10 @@ function registerDiffZone(server: McpServer, context: ToolContext): void {
     {
       title: 'Compare a proposed record set against the live zone',
       description:
-        'Reports what would change if the given records were applied to a zone, without ' +
-        'writing anything. Use this to review a change before making it.',
+        'Reports what would change if the given records were applied to a zone — added, ' +
+        'updated and unchanged — without writing anything. Use it to review a change before ' +
+        'making it with eurodns_dns_upsert_record; for the API’s own validation report on a ' +
+        'full zone document, use eurodns_dns_check_zone instead.',
       inputSchema: z.object({
         domainName: z.string().describe('Zone to compare against, e.g. example.com.'),
         records: z.array(RecordInputSchema).describe('Records the caller intends to end up with.'),

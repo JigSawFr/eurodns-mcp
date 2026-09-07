@@ -60,7 +60,10 @@ export function registerAuditTools(server: McpServer, context: ToolContext): num
           .enum(['allowed', 'denied', 'failed'])
           .optional()
           .describe('Outcome. "denied" shows refusals, which are often the interesting ones.'),
-        risk: z.enum(['read', 'write', 'destructive', 'billing']).optional(),
+        risk: z
+          .enum(['read', 'write', 'destructive', 'billing'])
+          .optional()
+          .describe('Risk class of the tool that ran: read, write, destructive or billing.'),
         actor: z
           .string()
           .optional()

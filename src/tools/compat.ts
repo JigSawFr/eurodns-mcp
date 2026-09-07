@@ -68,8 +68,9 @@ function registerSearch(server: McpServer, context: ToolContext): void {
     {
       title: 'Search domains in this account',
       description:
-        'Finds domains in this account matching a search term. Returns one result per ' +
-        'domain, whose id can be passed to fetch for the full record.',
+        'Finds domains in this account matching a search term and returns one result per ' +
+        'domain. Use it to locate a domain by name; pass a result’s id to fetch for the ' +
+        'full record.',
       inputSchema: z.object({
         query: z.string().describe('Free text matched against the account’s domain names.'),
       }),
@@ -126,7 +127,8 @@ function registerFetch(server: McpServer, context: ToolContext): void {
       title: 'Fetch one domain record',
       description:
         'Returns the full registry record for one domain, given the id a search result ' +
-        'carried — which for this server is the domain name itself.',
+        'carried. For this server that id is the domain name itself, so use it directly ' +
+        'when you already know the name.',
       inputSchema: z.object({
         id: z.string().describe('The domain name, as returned by search.'),
       }),

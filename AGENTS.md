@@ -30,8 +30,9 @@ CI runs, and they are fast enough that there is no reason to find out from CI in
 test fixtures that no longer compile.
 
 **Never edit `src/generated/`.** It is emitted by `scripts/gen-operations.ts` from
-`spec/openapi.json`. Change the generator, or the curated names and descriptions in
-`src/tools/naming.ts` and `src/tools/overrides.ts`, then run `npm run gen`. CI regenerates the
+`spec/openapi.json`. Change the generator, or the curated layer in `src/tools/` — names in
+`naming.ts`, tool text in `overrides.ts` and `composites.ts`, argument text in
+`parameters.ts` — then run `npm run gen`. CI regenerates the
 output and fails if what you committed has drifted.
 
 **Coverage thresholds in `vitest.config.ts` are pinned to the exact current measurement.** Raise
@@ -59,16 +60,16 @@ demonstrate its shape.
 
 ## How the code is arranged
 
-| Path                  | What lives there                                                               |
-| --------------------- | ------------------------------------------------------------------------------ |
-| `src/tools/`          | Tool registration: the generated registry, three hand-written DNS tools, audit |
-| `src/generated/`      | Emitted from the OpenAPI document — read it, never edit it                     |
-| `src/auth/`           | Token verification, scopes, and the guardrail evaluation                       |
-| `src/services/`       | The upstream HTTP client and result rendering                                  |
-| `src/instructions.ts` | What the server tells a model about itself in the handshake                    |
-| `scripts/`            | The generator                                                                  |
-| `spec/openapi.json`   | The vendored upstream contract                                                 |
-| `tests/`              | Vitest, driving a real MCP client over an in-memory transport                  |
+| Path                  | What lives there                                                                                                                                  |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/tools/`          | Tool registration: the registry, the pair-folding composites, the curated names and descriptions, the hand-written DNS, portfolio and audit tools |
+| `src/generated/`      | Emitted from the OpenAPI document — read it, never edit it                                                                                        |
+| `src/auth/`           | Token verification, scopes, and the guardrail evaluation                                                                                          |
+| `src/services/`       | The upstream HTTP client and result rendering                                                                                                     |
+| `src/instructions.ts` | What the server tells a model about itself in the handshake                                                                                       |
+| `scripts/`            | The generator                                                                                                                                     |
+| `spec/openapi.json`   | The vendored upstream contract                                                                                                                    |
+| `tests/`              | Vitest, driving a real MCP client over an in-memory transport                                                                                     |
 
 Risk classification (`read`, `write`, `destructive`, `billing`) is defined once in
 `src/constants.ts` and drives three separate things: the tool annotations, the runtime

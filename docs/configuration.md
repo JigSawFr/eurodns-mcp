@@ -152,7 +152,7 @@ create a charge or extend a paid term.
 Default off, meaning irreversible tools are **hidden**. Set true to advertise operations that
 destroy something outside DNS zone data.
 
-> Both default to off, which is why a default deployment advertises **64** of the 83 tools.
+> Both default to off, which is why a default deployment advertises **44** of the 63 tools.
 > The startup line names each hidden class and the variable that reveals it.
 
 ### `EURODNS_CONFIRM`

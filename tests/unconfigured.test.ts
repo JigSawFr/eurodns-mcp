@@ -192,7 +192,7 @@ describe('a server started without credentials', () => {
       fetchImpl,
     });
     try {
-      await client.callTool({ name: 'eurodns_tld_list', arguments: {} });
+      await client.callTool({ name: 'eurodns_tld_get', arguments: {} });
       await client.callTool({ name: 'search', arguments: { query: 'example' } });
     } finally {
       await close();
@@ -205,7 +205,7 @@ describe('a server started without credentials', () => {
       .map((line) => JSON.parse(line) as Record<string, unknown>)
       .filter((line) => line.verdict !== undefined);
 
-    expect(completed.map((line) => line.tool)).toEqual(['eurodns_tld_list', 'search']);
+    expect(completed.map((line) => line.tool)).toEqual(['eurodns_tld_get', 'search']);
     for (const line of completed) {
       expect(line).toMatchObject({ verdict: 'denied', reason: NO_CREDENTIALS_REASON });
       expect(line).not.toHaveProperty('upstreamStatus');

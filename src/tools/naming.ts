@@ -32,6 +32,13 @@ export const TAG_PREFIXES: Record<string, string> = {
  *
  * Two agents picking between `..._get_subscriptions` and `..._get_subscription` will guess;
  * `list` versus `get` is unambiguous. Kept small on purpose — everything else is derived.
+ *
+ * Every operation keeps a canonical name here even when it is no longer registered under
+ * it: the list/get pairs, the profile create/update pairs and the sign/unsign toggles are
+ * served by the composites in `composites.ts`, which absorb the operation and expose one
+ * tool in its place. The canonical name still matters — it is what `toolNameFor` answers,
+ * what the migration table in `docs/tools.md` maps from, and what a test uses to prove no
+ * absorbed operation is registered twice.
  */
 export const NAME_OVERRIDES: Record<string, string> = {
   // Derivation yields `update_user_a_pi_zone_profile` from `updateUserAPiZoneProfile`.
@@ -43,7 +50,9 @@ export const NAME_OVERRIDES: Record<string, string> = {
   getEmailSubscriptions: 'eurodns_email_list_subscriptions',
   getPremiumDnsSubscriptions: 'eurodns_premium_dns_list_subscriptions',
   getMicrosoftSubscriptions: 'eurodns_microsoft_list_subscriptions',
-  getSubscriptions: 'eurodns_subscription_list',
+  // `search`, like `eurodns_domain_search`: the one cross-product query, filtered rather
+  // than keyed. The product-specific tools are `..._get_subscription`, one per product.
+  getSubscriptions: 'eurodns_subscription_search',
   getContactProfiles: 'eurodns_contact_list_profiles',
   getNameserverProfiles: 'eurodns_nameserver_list_profiles',
   getInvoices: 'eurodns_invoice_list',
@@ -72,6 +81,17 @@ export function toSnakeCase(value: string): string {
 }
 
 /**
+ * The area an operation's tool name is grouped under: `dns`, `ssl`, `invoice_profile`…
+ *
+ * One definition, because three things key on it: the tool name below, the parameter
+ * descriptions in `parameters.ts` (where `id` means seven different things depending on the
+ * area) and the test that checks those descriptions against the operations.
+ */
+export function areaFor(operation: GeneratedOperation): string {
+  return TAG_PREFIXES[operation.tag] ?? toSnakeCase(operation.tag);
+}
+
+/**
  * Builds the MCP tool name for an operation.
  *
  * Every name is prefixed with `eurodns_` so it cannot collide with tools from another
@@ -83,7 +103,7 @@ export function toolNameFor(operation: GeneratedOperation): string {
   const override = NAME_OVERRIDES[operation.operationId];
   if (override) return override;
 
-  const prefix = TAG_PREFIXES[operation.tag] ?? toSnakeCase(operation.tag);
+  const prefix = areaFor(operation);
   const prefixWords = new Set(prefix.split('_'));
   const words = toSnakeCase(operation.operationId).split('_');
 
