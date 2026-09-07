@@ -177,8 +177,10 @@ jobs:
             | python3 -c 'import json,sys; print(len(json.load(sys.stdin)["tools"]))')
           echo "tools: $count"
           # Not the whole catalogue: this container enables neither billing nor irreversible
-          # operations, and those classes are hidden rather than advertised-and-refused.
-          [ "$count" -ge 60 ] || { echo "::error::expected the enabled tool surface, got $count"; exit 1; }
+          # operations, and those classes are hidden rather than advertised-and-refused. The
+          # 44 of a default deployment (docs/tools.md) plus the history query this container
+          # turns on — exact, so a tool lost or doubled in the image shows up here.
+          [ "$count" -eq 45 ] || { echo "::error::expected 45 tools, got $count"; exit 1; }
 
       # The whole point of the migration: the new revision served natively, on the same
       # endpoint, to a client that never sends `initialize`. A modern request is one carrying
@@ -203,7 +205,7 @@ jobs:
           list=$(modern 'tools/list')
           count=$(echo "$list" | python3 -c 'import json,sys; print(len(json.load(sys.stdin)["tools"]))')
           echo "modern tools: $count"
-          [ "$count" -ge 60 ] || { echo "::error::the modern path returned $count tools"; exit 1; }
+          [ "$count" -eq 45 ] || { echo "::error::the modern path returned $count tools, expected 45"; exit 1; }
 
           # Without a cache hint the SDK emits ttlMs 0, and a stateless deployment rebuilds
           # the whole catalogue on every request.

@@ -25,7 +25,9 @@ export function registerPortfolioTools(server: McpServer, context: ToolContext):
       title: 'Refresh the cached domain list',
       description:
         'Re-reads the account’s domains, so a name registered or transferred moments ago ' +
-        'appears in completion without waiting for the cache to expire. Changes nothing.',
+        'appears in completion without waiting for the cache to expire. Use it right after ' +
+        'such a change; it alters nothing upstream, and the domains themselves are listed by ' +
+        'eurodns_domain_search.',
       inputSchema: z.object({}),
       outputSchema: z.object({
         domains: z.number().int(),

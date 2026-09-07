@@ -156,7 +156,7 @@ describe('eurodns_audit_query tool', () => {
 
   it('returns the history, newest first', async () => {
     const path = logFile([
-      entry({ ts: '2026-01-01T00:00:00.000Z', tool: 'eurodns_tld_list' }),
+      entry({ ts: '2026-01-01T00:00:00.000Z', tool: 'eurodns_tld_get' }),
       entry({ ts: '2026-01-02T00:00:00.000Z', tool: 'eurodns_dns_get_zone' }),
     ]);
     const { client, close } = await connect({ config: withLog(path, 'all') });
@@ -204,7 +204,7 @@ describe('eurodns_audit_query tool', () => {
     // none of them leaves every one of those branches on its default side, which is how
     // they were all uncovered at once.
     const path = logFile([
-      entry({ ts: '2026-01-01T00:00:00.000Z', tool: 'eurodns_tld_list', risk: 'read' }),
+      entry({ ts: '2026-01-01T00:00:00.000Z', tool: 'eurodns_tld_get', risk: 'read' }),
       entry({
         ts: '2026-01-02T00:00:00.000Z',
         tool: 'eurodns_dns_save_zone',

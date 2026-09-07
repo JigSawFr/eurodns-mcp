@@ -119,13 +119,13 @@ describe('metrics endpoint', () => {
         .post('/mcp')
         .set('Authorization', `Bearer ${MCP_TOKEN}`)
         .set('Accept', 'application/json, text/event-stream')
-        .send(callTool('eurodns_tld_list', {}));
+        .send(callTool('eurodns_tld_get', {}));
     }
 
     const text = (
       await request(app).get('/metrics').set('Authorization', `Bearer ${METRICS_TOKEN}`)
     ).text;
-    expect(text).toContain('tool="eurodns_tld_list",risk="read",verdict="allowed"} 3');
+    expect(text).toContain('tool="eurodns_tld_get",risk="read",verdict="allowed"} 3');
   });
 
   it('names no domain, actor or target in any label', async () => {

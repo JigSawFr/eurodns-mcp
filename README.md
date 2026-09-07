@@ -30,7 +30,11 @@ domains, DNS zones, contacts, subscriptions, SSL, invoices and orders.
 
 ## What you get
 
-- **Full API coverage** — 79 tools generated from the OpenAPI document, grouped into 16 areas.
+- **Full API coverage in 44 tools** — every one of the 79 API operations, with each list/get
+  pair, profile create/update pair and on/off toggle folded into one tool; 63 tools once
+  billing and irreversible operations are enabled.
+- **Every tool and argument described** for the model that reads them: what it does, when to
+  prefer its neighbour, where an id comes from. A test holds the whole surface to it.
 - **Three DNS workflow tools** that make record edits safe, because saving a zone replaces it.
 - **Guardrails** so a deployment can refuse operations that spend money or destroy things.
 - **Four prompts** for the workflows worth naming, and **two resources**: the portfolio,
@@ -132,7 +136,7 @@ ways around it.
 | "What would change if I pointed www at 203.0.113.10?" | `eurodns_dns_diff_zone`               |
 | "Is example.lu available?"                            | `eurodns_domain_check_availability`   |
 | "Which of my domains have DNSSEC enabled?"            | `eurodns_domain_search`               |
-| "When does this SSL certificate expire?"              | `eurodns_ssl_list_subscriptions`      |
+| "When does this SSL certificate expire?"              | `eurodns_ssl_get_subscription`        |
 | "What is my prepaid balance?"                         | `eurodns_account_get_prepaid_balance` |
 | "What did I change last week?"                        | `eurodns_audit_query`                 |
 | "What was refused, and why?"                          | `eurodns_audit_query`                 |
@@ -141,7 +145,7 @@ ways around it.
 
 | Page                                     | What it covers                                                          |
 | ---------------------------------------- | ----------------------------------------------------------------------- |
-| [Tools](docs/tools.md)                   | All 83 tools, the prompts and the two resources                         |
+| [Tools](docs/tools.md)                   | All 63 tools, the pairs they fold, the prompts and the two resources    |
 | [Guardrails](docs/guardrails.md)         | Risk classes, what a deployment can forbid, confirmation before a call  |
 | [Configuration](docs/configuration.md)   | Every environment variable, with its default                            |
 | [HTTP transport](docs/http-transport.md) | Serving several clients, static tokens, OAuth 2.1 and scopes            |

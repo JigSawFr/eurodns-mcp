@@ -9,8 +9,11 @@ npx @modelcontextprotocol/inspector node dist/index.js
 ```
 
 The tool surface is generated from `spec/openapi.json`; CI regenerates it and fails if the
-committed output has drifted. Edit the generator or the curated names and descriptions in
-`src/tools/`, never `src/generated/`.
+committed output has drifted. Edit the generator or the curated layer in `src/tools/`, never
+`src/generated/`: names in `naming.ts`, tool descriptions in `overrides.ts`, the tools that
+fold two operations into one in `composites.ts`, and argument descriptions in
+`parameters.ts`. `tests/descriptions.test.ts` holds every tool and argument to a written
+standard, and names the one that falls short.
 
 Tests run against a real MCP client over an in-memory transport, with the HTTP layer driven
 through the real Express app. No test touches the network.

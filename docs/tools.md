@@ -1,32 +1,89 @@
 # Tools
 
-79 tools are generated from the OpenAPI document, plus four hand-written tools — three DNS
-workflow tools and `eurodns_portfolio_refresh` — and, when enabled, the history query.
+The 79 operations of the OpenAPI document are served by **59 generated tools** — 40 that are
+one operation each, and 19 that stand in for a pair (a listing and its lookup, a create and
+its replace, an on and its off) — plus four hand-written tools: three DNS workflow tools and
+`eurodns_portfolio_refresh`. That is 63 tools with every risk class enabled, and **44** on a
+default deployment, which hides billing and irreversible operations. The history query and the
+compatibility pair are opt-in extras on top.
 
-| Area                 | Tools | Covers                                                      |
-| -------------------- | ----: | ----------------------------------------------------------- |
-| `dns`                |    16 | Zones, records, zone profiles, snapshots, DNSSEC signing    |
-| `ssl`                |    13 | Subscriptions, certificates, validation, reissue, revoke    |
-| `email`              |     8 | Mailbox subscriptions, aliases, catch-all, passwords        |
-| `premium_dns`        |     8 | Premium DNS subscriptions and their lifecycle               |
-| `contact`            |     6 | Reusable contact profiles and their default states          |
-| `domain`             |     5 | Domain lookup, search, availability, DNSSEC at the registry |
-| `nameserver`         |     5 | Reusable nameserver profiles                                |
-| `https_redirect`     |     4 | HTTPS redirect subscriptions                                |
-| `tld`                |     2 | TLD terms and requirements                                  |
-| `invoice`            |     2 | Invoice lookup and search                                   |
-| `invoice_profile`    |     2 | Customer invoice profiles                                   |
-| `order`              |     2 | Orders and per-line delivery status                         |
-| `subscription`       |     2 | Cross-product search, auto-renewal settings                 |
-| `microsoft`          |     2 | Microsoft subscriptions                                     |
-| `account`            |     1 | Prepaid balance                                             |
-| `contact_validation` |     1 | Resending contact validation email                          |
+| Area              | Default | All | Covers                                                       |
+| ----------------- | ------: | --: | ------------------------------------------------------------ |
+| `dns`             |      14 |  14 | Zones, records, zone profiles, snapshots, DNSSEC signing     |
+| `ssl`             |       6 |  12 | Subscriptions, certificates, validation, reissue, revoke     |
+| `premium_dns`     |       1 |   7 | Premium DNS subscriptions and their lifecycle                |
+| `contact`         |       4 |   5 | Reusable contact profiles, default states, validation emails |
+| `email`           |       4 |   5 | Mailbox subscriptions, aliases, catch-all, passwords         |
+| `domain`          |       4 |   4 | Domain lookup, search, availability, DNSSEC at the registry  |
+| `https_redirect`  |       1 |   4 | HTTPS redirect subscriptions                                 |
+| `nameserver`      |       2 |   3 | Reusable nameserver profiles                                 |
+| `subscription`    |       1 |   2 | Cross-product search, auto-renewal settings                  |
+| `account`         |       1 |   1 | Prepaid balance                                              |
+| `invoice`         |       1 |   1 | Invoice lookup and search                                    |
+| `invoice_profile` |       1 |   1 | Customer invoice profiles                                    |
+| `microsoft`       |       1 |   1 | Microsoft subscriptions                                      |
+| `order`           |       1 |   1 | Orders and per-line delivery status                          |
+| `portfolio`       |       1 |   1 | Refreshing the cached domain list behind completion          |
+| `tld`             |       1 |   1 | TLD terms and requirements                                   |
 
 Every tool name is prefixed with `eurodns_` so it cannot collide with another server's, and
 carries `readOnlyHint`, `destructiveHint` and `idempotentHint` annotations derived from what
 the operation actually does. The one exception is deliberate and opt-in: `EURODNS_COMPAT_TOOLS`
 adds an unprefixed `search`/`fetch` pair for clients that require those exact names — see
 [Protocol](protocol.md).
+
+Every tool and every argument carries a hand-written description: what the tool does and
+returns, when to prefer it over its neighbours by their exact names, and what each argument
+means and where its value comes from. The vendor's document says what an endpoint is called,
+not what it is for, and left 110 of its 127 parameters undescribed; `tests/descriptions.test.ts`
+holds the whole surface to that standard, so a tool that restates its title or an `id` that
+does not say which object it names fails the build.
+
+## One tool for a pair of operations
+
+The document exposes its collections as pairs — `GET /invoices` and `GET /invoices/{id}`,
+`POST /contact-profiles` and `PUT /contact-profiles/{id}`, `/sign` and `/unsign` — and a tool
+per endpoint made the model choose between twins that differ only in whether it holds an id.
+Each pair is now one tool whose arguments carry that choice, under three conventions:
+
+- **`…_get_<object>`** returns one item when `id` is given and lists or searches them, with the
+  listing's own filters and pagination, when it is omitted. The id argument is always `id`,
+  whatever the API calls it.
+- **`…_save_<object>`** creates when `id` is omitted and **replaces** when it is given. A
+  replace must send every field, changed or not: the API clears anything left out, which is
+  why the description tells you to read the object first.
+- **`…_set_<thing>`** flips one setting: `enabled` true or false for DNSSEC and the catch-all,
+  `action` `add` or `remove` for a mailbox alias.
+
+Both halves of a pair always share a risk class, so hiding a class, gating a scope and asking
+for confirmation still apply to a whole tool, and the audit line names the tool that was
+called rather than the operation it resolved to.
+
+Names that changed, and what replaces them:
+
+| Before                                                                    | Now                                                                                |
+| ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `eurodns_dns_list_zone_snapshots`                                         | `eurodns_dns_get_zone_snapshot` without `id`                                       |
+| `eurodns_dns_list_zone_profiles`                                          | `eurodns_dns_get_zone_profile` without `id`                                        |
+| `eurodns_dns_create_zone_profile`                                         | `eurodns_dns_save_zone_profile` without `id`                                       |
+| `eurodns_dns_sign_zone` / `eurodns_dns_unsign_zone`                       | `eurodns_dns_set_dnssec` with `enabled` true / false                               |
+| `eurodns_domain_sign` / `eurodns_domain_unsign`                           | `eurodns_domain_set_dnssec` with `enabled` true / false                            |
+| `eurodns_dns_delete_record_by_id`                                         | `eurodns_dns_delete_record` with `recordId`                                        |
+| `eurodns_tld_list`                                                        | `eurodns_tld_get` without `id`                                                     |
+| `eurodns_invoice_list`                                                    | `eurodns_invoice_get` without `id`                                                 |
+| `eurodns_invoice_profile_list`                                            | `eurodns_invoice_profile_get` without `id` (`cipId` is now `id`)                   |
+| `eurodns_order_list`                                                      | `eurodns_order_get` without `id`                                                   |
+| `eurodns_contact_list_profiles`                                           | `eurodns_contact_get_profile` without `id`                                         |
+| `eurodns_contact_create_profile` / `eurodns_contact_update_profile`       | `eurodns_contact_save_profile` without / with `id`                                 |
+| `eurodns_nameserver_list_profiles`                                        | `eurodns_nameserver_get_profile` without `id`                                      |
+| `eurodns_nameserver_create_profile` / `eurodns_nameserver_update_profile` | `eurodns_nameserver_save_profile` without / with `id`                              |
+| `eurodns_email_list_subscriptions`                                        | `eurodns_email_get_subscription` without `id`                                      |
+| `eurodns_email_create_alias` / `eurodns_email_delete_alias`               | `eurodns_email_set_alias` with `action` add / remove                               |
+| `eurodns_email_create_catchall` / `eurodns_email_delete_catchall`         | `eurodns_email_set_catchall` with `enabled` true / false                           |
+| `eurodns_premium_dns_list_subscriptions`                                  | `eurodns_premium_dns_get_subscription` without `id` (`subscriptionId` is now `id`) |
+| `eurodns_ssl_list_subscriptions`                                          | `eurodns_ssl_get_subscription` without `id` (`subscriptionId` is now `id`)         |
+| `eurodns_microsoft_list_subscriptions`                                    | `eurodns_microsoft_get_subscription` without `id`                                  |
+| `eurodns_subscription_list`                                               | `eurodns_subscription_search`                                                      |
 
 ## What the model is told before it starts
 
@@ -125,9 +182,9 @@ happens by accident.
 | `eurodns_dns_upsert_record` | Reads the zone, applies one change, validates it with the API, and saves only if validation passes.          |
 | `eurodns_dns_delete_record` | Resolves a record's id from its type and host, then deletes it. Refuses to guess when several records match. |
 
-The raw generated tools (`eurodns_dns_save_zone`, `eurodns_dns_add_records`,
-`eurodns_dns_delete_record_by_id`) remain available for callers that know exactly what they
-are doing.
+The raw generated tools (`eurodns_dns_save_zone`, `eurodns_dns_add_records`) remain available
+for callers that know exactly what they are doing, and `eurodns_dns_delete_record` takes a
+raw `recordId` in place of the type-and-host lookup for a caller that has just read the zone.
 
 Three details worth knowing, all of which this server enforces for you:
 

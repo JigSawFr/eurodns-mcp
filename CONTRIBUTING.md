@@ -19,8 +19,8 @@ Node 22 or newer; `.nvmrc` names 24, which is what the container runs.
 
 **Never edit `src/generated/` by hand.** Those files are written by `npm run gen` from
 `spec/openapi.json`, and CI fails the build if regenerating produces a diff. If a tool needs
-to change, change the generator in `scripts/gen-operations.ts` or the curated overrides in
-`src/tools/overrides.ts` and `src/tools/naming.ts`, then regenerate.
+to change, change the generator in `scripts/gen-operations.ts` or the curated layer in
+`src/tools/` — `naming.ts`, `overrides.ts`, `composites.ts`, `parameters.ts` — then regenerate.
 
 The vendored OpenAPI document is refreshed deliberately, not casually: a weekly job compares
 it against the published one and opens an issue when they diverge. Taking a vendor change

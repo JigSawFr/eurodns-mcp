@@ -3,8 +3,8 @@ import {
   inputResponse,
   type McpServer,
   type AuthInfo,
+  type ServerContext,
 } from '@modelcontextprotocol/server';
-import { z, type ZodRawShape } from 'zod';
 import {
   OPERATIONS,
   type GeneratedOperation,
@@ -14,91 +14,23 @@ import { evaluateGuardrails, scopeForRisk } from '../auth/scopes.js';
 import { formatJson, redactForAudit } from '../services/format.js';
 import { failureMessage, failureOutcome } from './failure.js';
 import { toolNameFor } from './naming.js';
-import { describeOperation } from './overrides.js';
+import { describeOperation, titleFor } from './overrides.js';
+import {
+  ABSORBED_OPERATION_IDS,
+  COMPOSITES,
+  memberOperation,
+  type CompositeTool,
+} from './composites.js';
+import { buildInputSchema, outputSchema, toCamelCase } from './shapes.js';
 import type { CallerIdentity, ToolContext } from './context.js';
 import type { GuardrailConfig } from '../config.js';
-import { AUDIT_SCOPE, MAX_PAGE_SIZE, type RiskClass } from '../constants.js';
+import { AUDIT_SCOPE, type RiskClass } from '../constants.js';
 import { AUDIT_QUERY_TOOL_NAME } from './auditNames.js';
 import { PORTFOLIO_REFRESH_TOOL_NAME } from './portfolioNames.js';
 import { COMPAT_FETCH_TOOL_NAME, COMPAT_SEARCH_TOOL_NAME } from './compatNames.js';
 
-/** `domain-name` -> `domainName`, so tool arguments read like ordinary parameters. */
-export function toCamelCase(value: string): string {
-  return value.replace(/[-_](.)/g, (_, c: string) => c.toUpperCase());
-}
-
 /** Argument names whose value identifies the object an audit line is about. */
 const TARGET_ARGUMENT_NAMES = ['domainName', 'subscriptionId', 'id', 'certificateId'];
-
-const paginationShape: ZodRawShape = {
-  page: z.number().int().min(1).optional().describe('1-based page number.'),
-  // No `-1` here, though the vendor's document offers it on three endpoints: the API rejects
-  // it on all three, measured rather than assumed. See MAX_PAGE_SIZE. Accepting a sentinel the
-  // upstream refuses would only move the failure from this schema to a 400 nobody expects.
-  size: z
-    .number()
-    .int()
-    .min(1)
-    .max(MAX_PAGE_SIZE)
-    .optional()
-    .describe(`Results per page, 1 to ${MAX_PAGE_SIZE}.`),
-  sortField: z.string().optional().describe('Field to sort by.'),
-  sortOrder: z.enum(['ASC', 'DESC']).optional().describe('Sort direction.'),
-};
-
-/**
- * A permissive output schema.
- *
- * The API is known to deviate from its own document in places, so pinning
- * `structuredContent` to the generated response schema would turn a vendor-side surprise
- * into a hard tool failure. Wrapping instead gives callers reliable structured access to
- * the status and payload without asserting the payload's shape.
- */
-const outputSchema = z.object({
-  status: z.number().int().describe('Upstream HTTP status code.'),
-  data: z.unknown().describe('Response body as returned by the API.'),
-});
-
-/**
- * A shape being assembled.
- *
- * `ZodRawShape` is readonly from zod 4 on, so it describes a finished shape rather than one
- * under construction. Building in a mutable map and returning it as `ZodRawShape` keeps the
- * published type honest without fighting the library.
- */
-type MutableShape = { -readonly [K in keyof ZodRawShape]: ZodRawShape[K] };
-
-function parameterShape(params: GeneratedParameter[]): ZodRawShape {
-  const shape: MutableShape = {};
-  for (const param of params) {
-    const described = param.description ? param.schema.describe(param.description) : param.schema;
-    shape[toCamelCase(param.name)] = param.required ? described : described.optional();
-  }
-  return shape;
-}
-
-/**
- * The input schema for one operation.
- *
- * Assembled as a shape from three parameter groups, then wrapped: from the 2026-07-28 SDK a
- * tool takes a Standard Schema object rather than a raw shape.
- */
-export function buildInputSchema(operation: GeneratedOperation) {
-  const shape: MutableShape = {
-    ...parameterShape(operation.pathParams),
-    ...parameterShape(operation.queryParams),
-    ...parameterShape(operation.headerParams),
-  };
-
-  if (operation.paginated) Object.assign(shape, paginationShape);
-
-  if (operation.body) {
-    const schema = operation.body.schema.describe('Request body.');
-    shape.body = operation.body.required ? schema : schema.optional();
-  }
-
-  return z.object(shape);
-}
 
 /** Substitutes `{placeholders}` in the operation path from the call arguments. */
 function resolvePath(operation: GeneratedOperation, args: Record<string, unknown>): string {
@@ -195,14 +127,21 @@ export const HAND_WRITTEN_TOOL_REQUIREMENTS: Record<string, ToolRequirement> = {
  * the handler's own check becomes the only thing standing between a caller and an operation
  * their token does not authorise. A test asserts that, because the failure mode of
  * forgetting is silent: the tool works, for everyone.
+ *
+ * Absorbed operations are left out on purpose: they have no tool, so an entry for them would
+ * describe a name nothing can call.
  */
 export function toolScopeIndex(): Map<string, ToolRequirement> {
   const index = new Map<string, ToolRequirement>();
   for (const operation of OPERATIONS) {
+    if (ABSORBED_OPERATION_IDS.has(operation.operationId)) continue;
     index.set(toolNameFor(operation), {
       risk: operation.risk,
       scope: scopeForRisk(operation.risk),
     });
+  }
+  for (const composite of COMPOSITES) {
+    index.set(composite.name, { risk: composite.risk, scope: scopeForRisk(composite.risk) });
   }
   for (const [name, requirement] of Object.entries(HAND_WRITTEN_TOOL_REQUIREMENTS)) {
     index.set(name, requirement);
@@ -255,13 +194,35 @@ function canConfirm(context: ToolContext, envelopePresent: boolean): boolean {
   return envelopePresent || context.sessionful;
 }
 
+/**
+ * Registers the generated operations that stand on their own as tools.
+ *
+ * Operations a composite absorbs are skipped: they are still called, through the
+ * composite's routing, but a second registration under their own name would be the twin
+ * the composites exist to remove.
+ */
 export function registerGeneratedTools(server: McpServer, context: ToolContext): number {
   let registered = 0;
 
   for (const operation of OPERATIONS) {
+    if (ABSORBED_OPERATION_IDS.has(operation.operationId)) continue;
     if (!isAdvertised(operation.risk, context.config.guardrails)) continue;
 
     registerOperation(server, context, operation);
+    registered += 1;
+  }
+
+  return registered;
+}
+
+/** Registers the tools that stand in for two operations each. See `composites.ts`. */
+export function registerCompositeTools(server: McpServer, context: ToolContext): number {
+  let registered = 0;
+
+  for (const composite of COMPOSITES) {
+    if (!isAdvertised(composite.risk, context.config.guardrails)) continue;
+
+    registerComposite(server, context, composite);
     registered += 1;
   }
 
@@ -274,140 +235,181 @@ function registerOperation(
   operation: GeneratedOperation,
 ): void {
   const name = toolNameFor(operation);
-  const isRead = operation.risk === 'read';
   server.registerTool(
     name,
     {
-      title: operation.summary || operation.operationId,
+      title: titleFor(operation),
       description: describeOperation(operation),
       inputSchema: buildInputSchema(operation),
       outputSchema,
       annotations: {
-        readOnlyHint: isRead,
+        readOnlyHint: operation.risk === 'read',
         destructiveHint: operation.risk === 'destructive' || operation.method === 'DELETE',
         idempotentHint: ['GET', 'PUT', 'DELETE'].includes(operation.method),
         openWorldHint: true,
       },
     },
-    async (rawArgs, ctx) => {
-      const args = (rawArgs ?? {}) as Record<string, unknown>;
-      const identity = identityFrom(context, ctx?.http?.authInfo);
-      const target = auditTarget(args);
+    (rawArgs, ctx) =>
+      executeOperation(context, operation, name, (rawArgs ?? {}) as Record<string, unknown>, ctx),
+  );
+}
 
-      /** Records a refusal. Kept as one step so a denial is never left unlogged. */
-      const deny = (reason: string) => {
-        const denied = context.audit.begin({
-          actor: identity.actor,
-          tool: name,
-          risk: operation.risk,
-          target,
-          params: auditParams(args),
-        });
-        denied.complete({ verdict: 'denied', reason });
-        return errorResult(reason);
-      };
-
-      const decision = evaluateGuardrails(
-        operation.risk,
-        context.config.guardrails,
-        identity.scopes,
+function registerComposite(
+  server: McpServer,
+  context: ToolContext,
+  composite: CompositeTool,
+): void {
+  server.registerTool(
+    composite.name,
+    {
+      title: composite.title,
+      description: composite.description,
+      inputSchema: composite.inputSchema,
+      outputSchema,
+      annotations: composite.annotations,
+    },
+    (rawArgs, ctx) => {
+      const route = composite.route((rawArgs ?? {}) as Record<string, unknown>);
+      // The audit line carries the composite's name: that is what was called. Which member
+      // it resolved to is recoverable from the recorded arguments.
+      return executeOperation(
+        context,
+        memberOperation(route.operationId),
+        composite.name,
+        route.args,
+        ctx,
       );
-      if (!decision.allowed) return deny(decision.reason);
-
-      if (needsConfirmation(operation.risk, context.config.guardrails)) {
-        const answer = inputResponse(ctx?.mcpReq?.inputResponses, CONFIRM_KEY);
-
-        if (answer.kind === 'elicit' && answer.action !== 'accept') {
-          const how = answer.action === 'decline' ? 'declined' : 'cancelled';
-          return deny(`Refused: the caller ${how} the confirmation.`);
-        }
-
-        // Asserted by the client, never proven to come from a person. This raises the bar on
-        // accidents; it is not an authorisation check, which is why the deployment switches
-        // above still run first and still decide what is possible at all.
-        const confirmed =
-          answer.kind === 'elicit' && (answer.content as { confirm?: unknown } | undefined)
-            ? (answer.content as { confirm?: unknown }).confirm === true
-            : false;
-
-        if (!confirmed) {
-          if (answer.kind === 'elicit') {
-            return deny('Refused: the confirmation came back without an explicit yes.');
-          }
-          if (!canConfirm(context, ctx?.mcpReq?.envelope !== undefined)) {
-            return deny(
-              `${name} needs confirmation before it runs, and this connection cannot carry ` +
-                'one: the request is 2025-era traffic on a stateless HTTP transport, which ' +
-                'has no session for the exchange to travel over. Connect a client speaking ' +
-                'the 2026-07-28 revision, use the stdio transport, or unset EURODNS_CONFIRM.',
-            );
-          }
-          return inputRequired({
-            inputRequests: {
-              [CONFIRM_KEY]: inputRequired.elicit({
-                message:
-                  `Run ${name}${target ? ` on ${target}` : ''}? ` +
-                  (operation.risk === 'billing'
-                    ? 'This creates a charge or extends a paid term.'
-                    : 'This cannot be undone.'),
-                requestedSchema: {
-                  type: 'object',
-                  properties: {
-                    confirm: {
-                      type: 'boolean',
-                      title: 'Confirm',
-                      description: `${operation.method} ${operation.path}`,
-                    },
-                  },
-                  required: ['confirm'],
-                },
-              }),
-            },
-          });
-        }
-      }
-
-      const span = context.audit.begin({
-        actor: identity.actor,
-        tool: name,
-        risk: operation.risk,
-        target,
-        params: auditParams(args),
-      });
-
-      try {
-        const response = await context.client.request({
-          method: operation.method,
-          path: resolvePath(operation, args),
-          query: collect(operation.queryParams, args),
-          headers: collect(operation.headerParams, args) as Record<string, string>,
-          ...(operation.body && args.body !== undefined ? { body: args.body } : {}),
-          ...(operation.paginated
-            ? {
-                pagination: {
-                  page: args.page as number | undefined,
-                  size: args.size as number | undefined,
-                  sortField: args.sortField as string | undefined,
-                  sortOrder: args.sortOrder as string | undefined,
-                },
-              }
-            : {}),
-        });
-
-        span.complete({ verdict: 'allowed', upstreamStatus: response.status });
-
-        const structured = { status: response.status, data: response.data };
-        const rendered = formatJson(structured, context.config.upstream.characterLimit);
-        return {
-          content: [{ type: 'text' as const, text: rendered.text }],
-          structuredContent: structured,
-        };
-      } catch (error) {
-        span.complete(failureOutcome(error));
-        return errorResult(
-          failureMessage(error, `Unexpected failure calling ${operation.operationId}.`),
-        );
-      }
     },
   );
+}
+
+/**
+ * Runs one generated operation as a tool call: guardrails, confirmation, audit, the upstream
+ * request and the rendering of its answer.
+ *
+ * Shared between a tool that *is* an operation and a composite that has just chosen one, so
+ * that the two paths cannot drift — a refusal, a confirmation prompt or an audit line looks
+ * the same whichever way the operation was reached. `toolName` is the name the caller used,
+ * which for a composite is not the operation's own.
+ */
+export async function executeOperation(
+  context: ToolContext,
+  operation: GeneratedOperation,
+  toolName: string,
+  args: Record<string, unknown>,
+  ctx: ServerContext | undefined,
+) {
+  const identity = identityFrom(context, ctx?.http?.authInfo);
+  const target = auditTarget(args);
+
+  /** Records a refusal. Kept as one step so a denial is never left unlogged. */
+  const deny = (reason: string) => {
+    const denied = context.audit.begin({
+      actor: identity.actor,
+      tool: toolName,
+      risk: operation.risk,
+      target,
+      params: auditParams(args),
+    });
+    denied.complete({ verdict: 'denied', reason });
+    return errorResult(reason);
+  };
+
+  const decision = evaluateGuardrails(operation.risk, context.config.guardrails, identity.scopes);
+  if (!decision.allowed) return deny(decision.reason);
+
+  if (needsConfirmation(operation.risk, context.config.guardrails)) {
+    const answer = inputResponse(ctx?.mcpReq?.inputResponses, CONFIRM_KEY);
+
+    if (answer.kind === 'elicit' && answer.action !== 'accept') {
+      const how = answer.action === 'decline' ? 'declined' : 'cancelled';
+      return deny(`Refused: the caller ${how} the confirmation.`);
+    }
+
+    // Asserted by the client, never proven to come from a person. This raises the bar on
+    // accidents; it is not an authorisation check, which is why the deployment switches
+    // above still run first and still decide what is possible at all.
+    const confirmed =
+      answer.kind === 'elicit' && (answer.content as { confirm?: unknown } | undefined)
+        ? (answer.content as { confirm?: unknown }).confirm === true
+        : false;
+
+    if (!confirmed) {
+      if (answer.kind === 'elicit') {
+        return deny('Refused: the confirmation came back without an explicit yes.');
+      }
+      if (!canConfirm(context, ctx?.mcpReq?.envelope !== undefined)) {
+        return deny(
+          `${toolName} needs confirmation before it runs, and this connection cannot carry ` +
+            'one: the request is 2025-era traffic on a stateless HTTP transport, which ' +
+            'has no session for the exchange to travel over. Connect a client speaking ' +
+            'the 2026-07-28 revision, use the stdio transport, or unset EURODNS_CONFIRM.',
+        );
+      }
+      return inputRequired({
+        inputRequests: {
+          [CONFIRM_KEY]: inputRequired.elicit({
+            message:
+              `Run ${toolName}${target ? ` on ${target}` : ''}? ` +
+              (operation.risk === 'billing'
+                ? 'This creates a charge or extends a paid term.'
+                : 'This cannot be undone.'),
+            requestedSchema: {
+              type: 'object',
+              properties: {
+                confirm: {
+                  type: 'boolean',
+                  title: 'Confirm',
+                  description: `${operation.method} ${operation.path}`,
+                },
+              },
+              required: ['confirm'],
+            },
+          }),
+        },
+      });
+    }
+  }
+
+  const span = context.audit.begin({
+    actor: identity.actor,
+    tool: toolName,
+    risk: operation.risk,
+    target,
+    params: auditParams(args),
+  });
+
+  try {
+    const response = await context.client.request({
+      method: operation.method,
+      path: resolvePath(operation, args),
+      query: collect(operation.queryParams, args),
+      headers: collect(operation.headerParams, args) as Record<string, string>,
+      ...(operation.body && args.body !== undefined ? { body: args.body } : {}),
+      ...(operation.paginated
+        ? {
+            pagination: {
+              page: args.page as number | undefined,
+              size: args.size as number | undefined,
+              sortField: args.sortField as string | undefined,
+              sortOrder: args.sortOrder as string | undefined,
+            },
+          }
+        : {}),
+    });
+
+    span.complete({ verdict: 'allowed', upstreamStatus: response.status });
+
+    const structured = { status: response.status, data: response.data };
+    const rendered = formatJson(structured, context.config.upstream.characterLimit);
+    return {
+      content: [{ type: 'text' as const, text: rendered.text }],
+      structuredContent: structured,
+    };
+  } catch (error) {
+    span.complete(failureOutcome(error));
+    return errorResult(
+      failureMessage(error, `Unexpected failure calling ${operation.operationId}.`),
+    );
+  }
 }

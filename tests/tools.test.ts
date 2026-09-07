@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { OPERATIONS } from '../src/generated/operations.js';
+import { ABSORBED_OPERATION_IDS, COMPOSITES } from '../src/tools/composites.js';
 import { toolNameFor } from '../src/tools/naming.js';
 import { evaluateGuardrails } from '../src/auth/scopes.js';
 import { connect, isError, stubFetch, testConfig } from './harness.js';
@@ -11,9 +12,10 @@ describe('tool surface', () => {
     });
     const { tools } = await client.listTools();
 
-    // Four hand-written tools: three DNS workflow tools and the portfolio refresh. The audit
-    // query is not among them — it is off on this configuration.
-    expect(toolCount).toBe(OPERATIONS.length + 4);
+    // Every operation a composite does not absorb, plus the composites, plus four hand-written
+    // tools: three DNS workflow tools and the portfolio refresh. The audit query is not among
+    // them — it is off on this configuration.
+    expect(toolCount).toBe(OPERATIONS.length - ABSORBED_OPERATION_IDS.size + COMPOSITES.length + 4);
     expect(tools).toHaveLength(toolCount);
 
     const names = tools.map((t) => t.name);
@@ -53,7 +55,7 @@ describe('tool surface', () => {
   it('exposes pagination as ordinary arguments', async () => {
     const { client, close } = await connect();
     const { tools } = await client.listTools();
-    const invoices = tools.find((t) => t.name === 'eurodns_invoice_list');
+    const invoices = tools.find((t) => t.name === 'eurodns_invoice_get');
 
     const properties = (invoices?.inputSchema as { properties?: Record<string, unknown> })
       .properties;
@@ -71,7 +73,7 @@ describe('tool surface', () => {
     const { client, close } = await connect({ fetchImpl });
 
     const result = await client.callTool({
-      name: 'eurodns_invoice_list',
+      name: 'eurodns_invoice_get',
       arguments: { size: 500 },
     });
 
@@ -94,7 +96,7 @@ describe('tool surface', () => {
 
     for (const size of [0, -1, -2, 501]) {
       const result = await client.callTool({
-        name: 'eurodns_invoice_list',
+        name: 'eurodns_invoice_get',
         arguments: { size },
       });
       expect(isError(result), `size ${size} should be refused`).toBe(true);
@@ -205,41 +207,11 @@ describe('deployment guardrails', () => {
     const { client, close } = await connect({ fetchImpl });
 
     await client.callTool({
-      name: 'eurodns_dns_delete_record_by_id',
+      name: 'eurodns_dns_delete_record',
       arguments: { domainName: 'example.com', recordId: 42 },
     });
 
     expect(requests[0]?.method).toBe('DELETE');
-    await close();
-  });
-});
-
-describe('tool descriptions', () => {
-  it('names every overridden operation, so a rename cannot orphan a description', async () => {
-    const { DESCRIPTION_OVERRIDES } = await import('../src/tools/overrides.js');
-    const known = new Set(OPERATIONS.map((o) => o.operationId));
-    for (const operationId of Object.keys(DESCRIPTION_OVERRIDES)) {
-      expect(known.has(operationId), operationId).toBe(true);
-    }
-  });
-
-  it('warns that saving a zone replaces it, and points at the safe alternative', async () => {
-    const { client, close } = await connect();
-    const { tools } = await client.listTools();
-    const save = tools.find((t) => t.name === 'eurodns_dns_save_zone');
-
-    expect(save?.description).toContain('deleted');
-    expect(save?.description).toContain('eurodns_dns_upsert_record');
-    await close();
-  });
-
-  it('strips the HTML the document embeds in its descriptions', async () => {
-    const { client, close } = await connect();
-    const { tools } = await client.listTools();
-
-    for (const tool of tools) {
-      expect(tool.description ?? '', tool.name).not.toContain('<br');
-    }
     await close();
   });
 });

@@ -10,6 +10,8 @@ import { identityFrom, toolScopeIndex } from '../src/tools/registry.js';
 import { loadConfig, type Config } from '../src/config.js';
 import { ALL_SCOPES, AUDIT_SCOPE, SCOPES } from '../src/constants.js';
 import { SERVER_VERSION } from '../src/server.js';
+import { OPERATIONS } from '../src/generated/operations.js';
+import { ABSORBED_OPERATION_IDS, COMPOSITES } from '../src/tools/composites.js';
 import { stubFetch } from './harness.js';
 
 const ISSUER = 'https://issuer.example.com';
@@ -580,8 +582,16 @@ describe('both protocol eras on one endpoint', () => {
     expect(response.status).toBe(200);
     // The default deployment enables neither billing nor irreversible operations, and those
     // classes are hidden rather than advertised-and-refused — so this is not the whole
-    // catalogue. `tests/tools.test.ts` covers the full surface with both switches on.
-    expect(result.tools.length).toBeGreaterThanOrEqual(60);
+    // catalogue: the standalone read and write operations, the composites (all read or
+    // write) and the four hand-written tools. `tests/tools.test.ts` covers the full surface.
+    const advertised =
+      OPERATIONS.filter(
+        (o) =>
+          !ABSORBED_OPERATION_IDS.has(o.operationId) && (o.risk === 'read' || o.risk === 'write'),
+      ).length +
+      COMPOSITES.length +
+      4;
+    expect(result.tools.length).toBe(advertised);
   });
 
   it('carries a cache hint on the list result the SDK builds', async () => {
