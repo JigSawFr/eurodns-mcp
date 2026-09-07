@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.10.0](https://github.com/JigSawFr/eurodns-mcp/compare/v0.9.1...v0.10.0) (2026-09-07)
+
+
+### ⚠ BREAKING CHANGES
+
+* twenty-three tool names are gone. Each `…_list_…` tool is its `…_get_…` sibling called without `id` (`eurodns_invoice_list` → `eurodns_invoice_get`; the get's id argument is now `id` everywhere, where it was `cipId` or `subscriptionId`). `create`/`update` profile pairs are `…_save_…` without and with `id`. `sign`/`unsign` are `…_set_dnssec` with `enabled`; alias and catch-all create/delete are `eurodns_email_set_alias` with `action` and `eurodns_email_set_catchall` with `enabled`. `eurodns_subscription_list` is `eurodns_subscription_search`, and `eurodns_dns_delete_record_by_id` is `eurodns_dns_delete_record` with `recordId`. The full table is in docs/tools.md.
+
+### Features
+
+* fold each pair of operations into one tool, and describe every tool and argument ([#86](https://github.com/JigSawFr/eurodns-mcp/issues/86)) ([0ad21fc](https://github.com/JigSawFr/eurodns-mcp/commit/0ad21fc3baf1fa23376823e1a77ff38d6715fe70))
+* start without credentials on stdio, so a marketplace can list the tools ([#85](https://github.com/JigSawFr/eurodns-mcp/issues/85)) ([e063847](https://github.com/JigSawFr/eurodns-mcp/commit/e0638472929b0fb2e046bb24f6e2639aa4d9a0c5))
+
+
+### Documentation
+
+* add the LobeHub and Glama badges to the README ([#83](https://github.com/JigSawFr/eurodns-mcp/issues/83)) ([a7ca9f9](https://github.com/JigSawFr/eurodns-mcp/commit/a7ca9f9f435515987a1f3eb9aff42682a750b192))
+
 ## [0.9.1](https://github.com/JigSawFr/eurodns-mcp/compare/v0.9.0...v0.9.1) (2026-09-03)
 
 
