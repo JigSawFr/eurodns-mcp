@@ -71,6 +71,7 @@ commit per pull request is one changelog entry.
 | `format:check`                  | Prettier, no discussion                                                              |
 | `coverage` with floors          | measured, not aspirational; a floor exists to catch a real drop                      |
 | the `docker` job                | the only place the container is exercised at all                                     |
+| `tdqs lint` with no error       | the registries' own linter, on the listing they see; a gate there caps the score     |
 
 That last one is worth knowing about: it builds the image, starts it read-only with no
 capabilities, and asserts the things a unit test cannot — that the server refuses to listen

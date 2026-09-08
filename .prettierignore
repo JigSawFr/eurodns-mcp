@@ -7,3 +7,4 @@ coverage/
 # Written by release-please, which emits `*` bullets where Prettier wants `-`.
 # Reformatting it would last exactly until the next release regenerates it.
 CHANGELOG.md
+tdqs/

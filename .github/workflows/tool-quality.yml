@@ -2,15 +2,22 @@ name: Tool definition quality
 
 # The registries that list this server score every tool definition — Glama with the TDQS
 # rubric — and the score is a first impression a model and a person both read before they
-# try a single call. Most of that rubric is a language model's judgement and is not
-# reproduced here. What it defines as arithmetic is: the contextual signals an evaluator is
-# handed, the hard gates (no description, a description that is the name, prose that
-# contradicts an annotation), the tool-count anchor and the shadowing candidates. This runs
-# exactly that, on the listing a registry would see and on the full surface, and puts the
-# report in the job summary with the raw `tools/list` as an artifact.
+# try a single call. Glama publishes the reference implementation as `mcp-tdqs`, and this
+# runs its linter: the stages of the pipeline that need no model — the contextual signals an
+# evaluator is handed, the hard gates (no description, a description that is the name), the
+# shadow prefilter and the checklist the specification ranks highest — on the listing a
+# registry sees and on the full surface. The reports go in the job summary, the raw
+# `tools/list` of both deployments and the JSON reports in an artifact.
 #
-# It runs on pull requests, unlike spec-drift.yml and link-check.yml, because it depends on
-# nothing outside the repository: no network, no key, no third party that could make an
+# `--fail-on error`: the gates fail the run. The warnings do not, and one is expected — the
+# shadow prefilter pairs any tool with any materially cheaper sibling across the whole
+# server, and only the coherence evaluation, a model call, can say whether the purposes
+# overlap. The full `tdqs score` is that model call; it needs a key, costs money on every
+# push and gives a different number to the same text on two runs, so it is not run here.
+# The dimension scores stay the registry's to give, and the README badge shows them.
+#
+# This runs on pull requests, unlike spec-drift.yml and link-check.yml, because it depends
+# on nothing outside the repository: no network, no key, no third party that could make an
 # unrelated pull request intermittently red. The prose itself is held to the rubric's shape
 # by `tests/descriptions.test.ts` in the CI workflow; this is the measurement, not the rule.
 
@@ -24,7 +31,7 @@ permissions:
   contents: read
 
 jobs:
-  score:
+  lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -33,15 +40,35 @@ jobs:
           node-version: '24'
           cache: npm
 
-      # `--ignore-scripts` on purpose: `prepare` builds the whole package, and the scorer runs
-      # the sources through tsx. ci.yml is where that path is exercised.
-      - run: npm ci --ignore-scripts
+      # Scripts stay enabled: `prepare` builds `dist/`, which the last check spawns.
+      - run: npm ci
 
-      - name: Score the tool definitions
-        run: npm run tdqs -- --out tdqs
+      # Writes the `tools/list` of both deployments to tdqs/, then lints each. This is the
+      # gate: a hard-gate finding exits 1 and fails the job.
+      - name: Lint the tool definitions
+        run: npm run tdqs
 
-      # What a model actually reads, for both deployments, plus the rendered report. Two of
-      # these from two commits show a change to the surface more plainly than the source diff.
+      # The same reports, rendered for a reader and kept as JSON. `--fail-on never`: the
+      # gate above has already spoken, and a report must not hide the one that failed.
+      - name: Report
+        if: always()
+        run: |
+          for deployment in default everything; do
+            npx tdqs lint --file "tdqs/$deployment.json" --server-name eurodns-mcp \
+              --format markdown --fail-on never >> "$GITHUB_STEP_SUMMARY"
+            npx tdqs lint --file "tdqs/$deployment.json" --server-name eurodns-mcp \
+              --format json --fail-on never --output "tdqs/$deployment.lint.json"
+          done
+
+      # What a marketplace gets when it spawns the published command with no environment at
+      # all: the stdio server starts without credentials to be listed, and the linter reads
+      # that listing over the real transport. The CI workflow's docker job covers HTTP; this
+      # is the only place the credential-less stdio path meets a real client.
+      - name: Lint the listing a marketplace spawns
+        run: npx tdqs lint --command "node dist/index.js" --server-name eurodns-mcp --fail-on error
+
+      # What a model actually reads, for both deployments, plus the reports. Two of these
+      # from two commits show a change to the surface more plainly than the source diff.
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         if: always()
         with:

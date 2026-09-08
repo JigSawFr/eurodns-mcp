@@ -51,7 +51,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "coverage": "vitest run --coverage",
-    "tdqs": "tsx scripts/tool-quality.ts"
+    "tdqs": "tsx scripts/tool-catalogue.ts --out tdqs && tdqs lint --file tdqs/default.json --server-name eurodns-mcp --fail-on error && tdqs lint --file tdqs/everything.json --server-name eurodns-mcp --fail-on error"
   },
   "dependencies": {
     "@modelcontextprotocol/express": "^2.0.0",
@@ -71,6 +71,7 @@
     "@typescript-eslint/parser": "^8.20.0",
     "@vitest/coverage-v8": "^4.1.11",
     "eslint": "^10.9.1",
+    "mcp-tdqs": "^0.2.0",
     "prettier": "^3.4.2",
     "supertest": "^7.2.2",
     "tsx": "^4.23.13",
