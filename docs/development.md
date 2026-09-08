@@ -5,6 +5,7 @@ npm install
 npm run gen      # regenerate src/generated from spec/openapi.json
 npm run build
 npm test
+npm run tdqs     # score the tool definitions the way a registry does, without a model
 npx @modelcontextprotocol/inspector node dist/index.js
 ```
 
@@ -13,7 +14,8 @@ committed output has drifted. Edit the generator or the curated layer in `src/to
 `src/generated/`: names in `naming.ts`, tool descriptions in `overrides.ts`, the tools that
 fold two operations into one in `composites.ts`, and argument descriptions in
 `parameters.ts`. `tests/descriptions.test.ts` holds every tool and argument to a written
-standard, and names the one that falls short.
+standard, and names the one that falls short; `npm run tdqs` measures what the registries
+measure on top of it — see [How the descriptions are scored](tools.md#how-the-descriptions-are-scored).
 
 Tests run against a real MCP client over an in-memory transport, with the HTTP layer driven
 through the real Express app. No test touches the network.

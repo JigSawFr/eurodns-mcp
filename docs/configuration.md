@@ -82,7 +82,7 @@ result is never silently partial.
 where a very long list is a cost rather than an answer. A dashboard or a script parsing the
 JSON has no such limit and truncation is pure loss for it; set this to whatever that caller
 can actually handle. The trade is real either way — see
-[`eurodns_domain_search`](tools.md) and its `size` ceiling of 500.
+[`eurodns_domain_get`](tools.md) and its `size` ceiling of 500.
 
 ### `EURODNS_PORTFOLIO_TTL_MS`
 
@@ -114,8 +114,8 @@ they will install a server at all. ChatGPT's developer mode needs none of this.
 Off by default because of the names, not the behaviour: these are the only two tools here
 without the `eurodns_` prefix that keeps every other name from colliding in a client with
 several servers connected. The contract is the bare names, so the collision cannot be designed
-away — only accepted deliberately. Both are reads over operations already exposed as
-`eurodns_domain_search` and `eurodns_domain_get`; they add reach, not capability. See
+away — only accepted deliberately. Both are reads over the two operations
+`eurodns_domain_get` already exposes; they add reach, not capability. See
 [Protocol](protocol.md).
 
 ```bash

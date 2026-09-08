@@ -44,8 +44,8 @@ exactly `search` and `fetch`, with a fixed shape, and refuse the install without
 **developer mode** takes arbitrary tools and needs none of this — so the pair opens one class
 of client, not the client, which is worth knowing before turning it on.
 
-`EURODNS_COMPAT_TOOLS=true` registers them. Both are reads over operations already exposed as
-`eurodns_domain_search` and `eurodns_domain_get`: `search(query)` returns one result per
+`EURODNS_COMPAT_TOOLS=true` registers them. Both are reads over the two operations
+`eurodns_domain_get` already exposes: `search(query)` returns one result per
 matching domain as `{ id, title, text }`, and `fetch(id)` returns that domain's full registry
 record. The id is the domain name itself — unique in the account, already the key the upstream
 read uses, and meaningful in a citation.

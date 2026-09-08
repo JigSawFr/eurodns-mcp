@@ -45,12 +45,14 @@ export function registerAuditTools(server: McpServer, context: ToolContext): num
     {
       title: 'Search the action history',
       description:
-        'Searches this server’s audit log: which tool ran, on what, for whom, and whether it ' +
-        'was allowed, refused or failed. Use it to answer questions about what has been done ' +
-        'recently. ' +
+        'Searches this server’s own audit log — which tool ran, on what target, for which ' +
+        'actor, and whether it was allowed, denied or failed — and returns the matching ' +
+        'lines, up to limit. Narrow with since and until, tool, target, verdict or risk; ' +
+        'it reads the local log only and never calls the EuroDNS API, so it says nothing ' +
+        'about changes made outside this server. ' +
         (scopedToCaller
-          ? 'Results are limited to the calling identity’s own actions.'
-          : 'Results cover every caller.'),
+          ? 'Results are limited to the calling identity’s own actions, and actor is refused.'
+          : 'Results cover every caller; give actor to see one.'),
       inputSchema: z.object({
         since: z.string().optional().describe('ISO 8601 lower bound, e.g. 2026-01-01T00:00:00Z.'),
         until: z.string().optional().describe('ISO 8601 upper bound.'),

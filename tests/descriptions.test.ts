@@ -31,6 +31,14 @@ import { connect, testConfig } from './harness.js';
  * description fails silently: a summary that restates the title, an `id` with no word on
  * which object it names, a sibling cited by a name that no longer exists after a rename.
  *
+ * The shape every description follows, and the rules below check for: what it does and
+ * returns, first; when to use it and when *not* to, naming the neighbour; what it does that
+ * the annotations cannot say — an email sent, a document replaced whole, a 404; and what the
+ * schema cannot say about the arguments, so at least one argument is named in the prose. The
+ * published scoring rubric (Glama's TDQS) gives a description that merely restates a fully
+ * described schema a floor of 3 out of 5 on parameter semantics, and credits when-not
+ * guidance and disclosed behaviour separately: the rules are shaped to those three gaps.
+ *
  * Runs against the whole surface — billing, destructive, the audit query and the
  * compatibility pair all on — because a deployment that enables a class deserves the same
  * standard as the default one.
@@ -41,6 +49,7 @@ interface ListedTool {
   title?: string;
   description?: string;
   inputSchema: { properties?: Record<string, { description?: string }> };
+  annotations?: { readOnlyHint?: boolean };
 }
 
 const everything = testConfig({
@@ -76,6 +85,15 @@ const STOPWORDS = new Set(
 );
 const USAGE_CUES =
   /\b(use (it|this)|prefer|instead|before|after|when|only|rather than|start here|check (it|this)|first|needs?|requires?|omit)\b/i;
+/** A contrast — when this tool is the wrong one — rather than only a condition for using it. */
+const WHEN_NOT_CUES = /\b(instead|rather than|not (?:for|as|here)|only|do not|does not|never)\b/i;
+/**
+ * Verbs that assert a write. A read-only tool whose prose opens a sentence with one of them
+ * contradicts its own annotation, which the rubric scores at the floor and flags. Tool names
+ * are stripped first: "eurodns_dns_save_zone" cited inside a read is a reference, not a verb.
+ */
+const WRITE_VERBS =
+  /^(creates?|updates?|deletes?|removes?|replaces?|saves?|signs?|sends?|orders?|revokes?)\b/i;
 
 describe('every tool description', () => {
   expect(tools.length).toBe(
@@ -88,12 +106,12 @@ describe('every tool description', () => {
 
     // Size: enough to say something, not a manual. Sentences, not a fragment.
     expect(description.length).toBeGreaterThanOrEqual(80);
-    expect(description.length).toBeLessThanOrEqual(480);
+    expect(description.length).toBeLessThanOrEqual(640);
     expect(description.endsWith('.')).toBe(true);
     expect(description).not.toContain('<');
     expect(description).not.toMatch(/\bthis tool\b/i);
-    expect(sentences(description).length).toBeGreaterThanOrEqual(2);
-    expect(sentences(description).length).toBeLessThanOrEqual(4);
+    expect(sentences(description).length).toBeGreaterThanOrEqual(3);
+    expect(sentences(description).length).toBeLessThanOrEqual(5);
 
     // Not a tautology: it says more than the title does.
     expect(normalise(description)).not.toBe(normalise(title));
@@ -103,9 +121,28 @@ describe('every tool description', () => {
     );
     expect(beyondTitle.length).toBeGreaterThanOrEqual(3);
 
-    // Usage guidance: a neighbour by name, or a condition under which to reach for it.
+    // Usage guidance: a neighbour by name, or a condition under which to reach for it — and
+    // a contrast, because "use it when X" alone leaves the model to infer when not to.
     const others = toolNames(description).filter((name) => name !== tool.name);
     expect(others.length > 0 || USAGE_CUES.test(description), 'no when-to-use').toBe(true);
+    expect(WHEN_NOT_CUES.test(description), 'no when-not-to-use').toBe(true);
+
+    // Behaviour must not contradict the annotation. Read-only tools may cite a writer by
+    // name, so names go before the verb check.
+    if (tool.annotations?.readOnlyHint === true) {
+      const prose = description.replace(/\beurodns_[a-z0-9_]+\b/g, 'x');
+      for (const sentence of sentences(prose)) {
+        expect(sentence, `read-only tool asserts a write: "${sentence}"`).not.toMatch(WRITE_VERBS);
+      }
+    }
+
+    // Parameter semantics: the prose says something about at least one argument that the
+    // schema cannot — which requires naming it. The schema alone earns no credit.
+    const argumentNames = Object.keys(tool.inputSchema.properties ?? {});
+    if (argumentNames.length > 0) {
+      const named = argumentNames.filter((key) => new RegExp(`\\b${key}\\b`).test(description));
+      expect(named.length, 'no argument named in the description').toBeGreaterThan(0);
+    }
 
     // Every argument means something, and says it.
     const properties = tool.inputSchema.properties ?? {};
@@ -147,6 +184,26 @@ describe('every tool description', () => {
       for (const name of texts.flatMap(toolNames)) {
         expect(REGISTERED.has(name), `${tool.name} cites ${name}`).toBe(true);
         expect(name, `${tool.name} cites itself`).not.toBe(tool.name);
+      }
+    }
+  });
+
+  it('cites, on a default deployment, only tools that deployment advertises', async () => {
+    // The rule above runs with every class on, so a read that points at a billing tool
+    // passes it — and dangles on the deployment a registry actually lists. A model told to
+    // "use eurodns_x instead" when eurodns_x is not there will look for it, then guess.
+    const { client, close } = await connect({ config: testConfig() });
+    const listed = (await client.listTools()).tools as ListedTool[];
+    await close();
+
+    const advertised = new Set(listed.map((tool) => tool.name));
+    for (const tool of listed) {
+      const texts = [
+        tool.description ?? '',
+        ...Object.values(tool.inputSchema.properties ?? {}).map((p) => p.description ?? ''),
+      ];
+      for (const name of texts.flatMap(toolNames)) {
+        expect(advertised.has(name), `${tool.name} cites ${name}, hidden by default`).toBe(true);
       }
     }
   });
@@ -260,7 +317,7 @@ describe('the resolvers', () => {
   });
 
   it('title from the override, else the summary, else the operation id', () => {
-    expect(titleFor(synthetic({ operationId: 'getDomain' }))).toBe(TITLE_OVERRIDES.getDomain);
+    expect(titleFor(synthetic({ operationId: 'getDnsZone' }))).toBe(TITLE_OVERRIDES.getDnsZone);
     expect(titleFor(synthetic({ operationId: 'x', summary: 'Do X' }))).toBe('Do X');
     expect(titleFor(synthetic({ operationId: 'x' }))).toBe('x');
   });

@@ -106,6 +106,30 @@ describe('eurodns_dns_upsert_record', () => {
     await close();
   });
 
+  it('adds a further record under an existing type and host when asked to append', async () => {
+    const { fetchImpl, requests } = stubFetch(zoneRoutes());
+    const { client, close } = await connect({ fetchImpl });
+
+    const result = await client.callTool({
+      name: 'eurodns_dns_upsert_record',
+      arguments: {
+        domainName: 'example.com',
+        type: 'TXT',
+        host: '_acme-challenge',
+        rdata: 'third',
+        append: true,
+      },
+    });
+
+    expect(isError(result)).toBeFalsy();
+    expect((result.structuredContent as { action: string }).action).toBe('created');
+    // Without append, the first matching TXT would have been replaced; here all three stand.
+    const saved = requests.at(-1)?.body as { records: Array<{ type: string; rdata: string }> };
+    const txt = saved.records.filter((r) => r.type === 'TXT').map((r) => r.rdata);
+    expect(txt).toEqual(['first', 'second', 'third']);
+    await close();
+  });
+
   it('refuses to modify a record the provider locked', async () => {
     const { fetchImpl, requests } = stubFetch(zoneRoutes());
     const { client, close } = await connect({ fetchImpl });

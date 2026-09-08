@@ -132,10 +132,13 @@ function registerUpsertRecord(server: McpServer, context: ToolContext): void {
     {
       title: 'Create or update a DNS record',
       description:
-        'Adds a DNS record to a zone, or updates the existing record with the same type and ' +
-        'host. Reads the zone, applies the change, validates it with the API, and saves only ' +
-        'if validation passes. Prefer this over saving a zone directly: saving replaces the ' +
-        'whole zone and drops anything not included.',
+        'Adds one DNS record to the zone domainName, or updates the existing record with the same ' +
+        'type and host, and returns the record as saved with the action taken. It reads the zone, ' +
+        'applies the change, runs the API’s validator and saves only if validation passes; a ' +
+        'rejected change returns the validation report and writes nothing. Prefer it over ' +
+        'eurodns_dns_save_zone, which replaces the whole zone. Give matchRdata to pick one of ' +
+        'several records sharing a host, or append: true to add a further record under an ' +
+        'existing type and host rather than updating it; the value goes in rdata.',
       inputSchema: z.object({
         domainName: z.string().describe('Zone to modify, e.g. example.com.'),
         type: RecordTypeSchema.describe('Record type, e.g. A, AAAA, CNAME, MX, TXT.'),
@@ -148,6 +151,13 @@ function registerUpsertRecord(server: McpServer, context: ToolContext): void {
           .describe(
             'Update only the record whose current value matches this. Use when several ' +
               'records share a type and host, such as multiple TXT entries.',
+          ),
+        append: z
+          .boolean()
+          .optional()
+          .describe(
+            'true adds the record even when one with the same type and host exists, instead ' +
+              'of updating it: a second TXT under one host, or a further MX. Default false.',
           ),
       }),
       outputSchema: z.object({
@@ -172,7 +182,7 @@ function registerUpsertRecord(server: McpServer, context: ToolContext): void {
         tool: name,
         risk: 'write',
         target: args.domainName,
-        params: { type: args.type, host: args.host, ttl: args.ttl },
+        params: { type: args.type, host: args.host, ttl: args.ttl, append: args.append },
       });
 
       // Kept although the HTTP scope gate already refuses this before dispatch: it is the
@@ -193,11 +203,15 @@ function registerUpsertRecord(server: McpServer, context: ToolContext): void {
         const zone = await readZone(context, args.domainName);
         const records = [...(zone.records ?? [])];
 
-        const index = records.findIndex(
-          (record) =>
-            sameRecordKey(record, { type: args.type, host: args.host }) &&
-            (args.matchRdata === undefined || record.rdata === args.matchRdata),
-        );
+        // `append` skips the lookup on purpose: the caller wants a further record under a
+        // key that already exists, which is the one thing an upsert by key cannot express.
+        const index = args.append
+          ? -1
+          : records.findIndex(
+              (record) =>
+                sameRecordKey(record, { type: args.type, host: args.host }) &&
+                (args.matchRdata === undefined || record.rdata === args.matchRdata),
+            );
 
         const action = index >= 0 ? 'updated' : 'created';
         const next: ZoneRecord = {
@@ -267,10 +281,12 @@ function registerDeleteRecord(server: McpServer, context: ToolContext): void {
     {
       title: 'Delete a DNS record',
       description:
-        'Deletes one DNS record from a zone, either by its numeric recordId or by type and ' +
-        'host, resolving the id from the live zone in the second case. Give rdata as well when ' +
-        'several records share a type and host: an ambiguous selection is refused rather than ' +
-        'guessed. Read the zone first with eurodns_dns_get_zone to see what it holds.',
+        'Deletes one DNS record from the zone domainName, either by its numeric recordId or by ' +
+        'type and host, resolving the id from the live zone in the second case, and returns what ' +
+        'was deleted. Give rdata as well when several records share a type and host: an ambiguous ' +
+        'selection is refused rather than guessed, and so is a record the provider locked. Read ' +
+        'the zone first with eurodns_dns_get_zone to see what it holds; to remove many records at ' +
+        'once, save a complete zone with eurodns_dns_save_zone instead.',
       inputSchema: z
         .object({
           domainName: z.string().describe('Zone to modify, e.g. example.com.'),
@@ -429,10 +445,12 @@ function registerDiffZone(server: McpServer, context: ToolContext): void {
     {
       title: 'Compare a proposed record set against the live zone',
       description:
-        'Reports what would change if the given records were applied to a zone — added, ' +
-        'updated and unchanged — without writing anything. Use it to review a change before ' +
-        'making it with eurodns_dns_upsert_record; for the API’s own validation report on a ' +
-        'full zone document, use eurodns_dns_check_zone instead.',
+        'Reports what would change if records were applied to the zone domainName — added, ' +
+        'updated with old and new values, and unchanged — without writing anything. Use it to ' +
+        'review a change before making it with eurodns_dns_upsert_record; it compares by type, ' +
+        'host and rdata, so a record with a new value shows as updated rather than added. It is ' +
+        'not the API’s validator: for a per-record validity report on a full zone document use ' +
+        'eurodns_dns_check_zone instead.',
       inputSchema: z.object({
         domainName: z.string().describe('Zone to compare against, e.g. example.com.'),
         records: z.array(RecordInputSchema).describe('Records the caller intends to end up with.'),

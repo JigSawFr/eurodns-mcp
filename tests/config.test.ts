@@ -314,7 +314,9 @@ describe('the scope gate and the handler agree on what exists', () => {
 
     const missing = tools.map((t) => t.name).filter((name) => !index.has(name));
     expect(missing, `no scope requirement registered for: ${missing.join(', ')}`).toEqual([]);
-    expect(tools.length).toBeGreaterThan(60);
+    // A floor, not the count: the point is that `missing` was computed over the real
+    // surface rather than over an empty listing. 0.11 folded 63 tools into 55.
+    expect(tools.length).toBeGreaterThan(50);
     await close();
   });
 });

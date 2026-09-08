@@ -6,7 +6,7 @@ import { areaFor } from './naming.js';
  *
  * The vendor's document leaves 110 of its 127 parameters undescribed — `id` on twenty-two
  * operations with no word on which object the id belongs to — and a model choosing between
- * `eurodns_ssl_get_certificate` and `eurodns_ssl_get_subscription` has to know that
+ * `eurodns_ssl_get_certificate` and `eurodns_subscription_get` has to know that
  * `subscriptionId` on the former is the *parent's* id. The schema carries the type; these
  * carry the meaning, and above all where the value comes from.
  *
@@ -60,7 +60,8 @@ export const PARAMETER_DESCRIPTIONS_BY_AREA: Record<string, string> = {
     'Numeric id of the zone profile, from the list eurodns_dns_get_zone_profile returns ' +
     'when called without an id.',
   'domain.domain-name':
-    'Fully qualified domain name, e.g. example.com, as listed by eurodns_domain_search.',
+    'Fully qualified domain name, e.g. example.com, as listed by eurodns_domain_get when ' +
+    'called without a domainName.',
   'contact.id':
     'Numeric id of the contact profile, from the list eurodns_contact_get_profile returns ' +
     'when called without an id.',
@@ -68,20 +69,20 @@ export const PARAMETER_DESCRIPTIONS_BY_AREA: Record<string, string> = {
     'Numeric id of the nameserver profile, from the list eurodns_nameserver_get_profile ' +
     'returns when called without an id.',
   'email.id':
-    'Numeric id of the email subscription, from the list eurodns_email_get_subscription ' +
-    'returns when called without an id.',
+    'Numeric id of the email subscription, from eurodns_subscription_get with product ' +
+    'email and no id.',
   'premium_dns.subscription-id':
-    'Numeric id of the Premium DNS subscription, from the list ' +
-    'eurodns_premium_dns_get_subscription returns when called without an id.',
+    'Numeric id of the Premium DNS subscription, from eurodns_subscription_get with ' +
+    'product premium_dns and no id.',
   'ssl.subscription-id':
-    'Numeric id of the SSL subscription, from the list eurodns_ssl_get_subscription returns ' +
-    'when called without an id.',
+    'Numeric id of the SSL subscription, from eurodns_subscription_get with product ssl ' +
+    'and no id.',
   'https_redirect.subscription-id':
-    'Numeric id of the HTTPS redirect subscription, as returned by ' +
-    'eurodns_subscription_search filtered on HTTPS_REDIRECT.',
+    'Numeric id of the HTTPS redirect subscription, from eurodns_subscription_get with ' +
+    'product https_redirect and no id.',
   'subscription.subscription-id':
     'Numeric id of the subscription, whatever its product, as returned by ' +
-    'eurodns_subscription_search.',
+    'eurodns_subscription_get called without product or id.',
 };
 
 export const PARAMETER_DESCRIPTIONS_BY_NAME: Record<string, string> = {
@@ -90,7 +91,7 @@ export const PARAMETER_DESCRIPTIONS_BY_NAME: Record<string, string> = {
     'returns when called without an id.',
   'certificate-id':
     'Numeric id of the certificate inside the subscription, from the certificates ' +
-    'eurodns_ssl_get_subscription returns.',
+    'eurodns_subscription_get returns for product ssl.',
   'san-name':
     'Subject Alternative Name exactly as it appears on the certificate, e.g. ' +
     'www.example.com, from eurodns_ssl_get_certificate.',
@@ -119,18 +120,11 @@ export const BODY_DESCRIPTIONS: Record<string, string> = {
   checkDnsZone:
     'The candidate zone to validate: records, urlForwards and mailForwards in the shape ' +
     'eurodns_dns_get_zone returns. Nothing is saved.',
-  addDnsRecords:
-    'The records to append, each with type, host, rdata and optionally a ttl from the ' +
-    'allowed list. Existing records are kept.',
   checkZoneProfile:
     'The candidate profile to validate: name, records, urlForwards and mailForwards. ' +
     'Nothing is saved.',
 
   // --- Domains --------------------------------------------------------------------
-  searchDomains:
-    'Search criteria: a free-text term with its termMatchingMode and termMatchFields, plus ' +
-    'boolean filters such as active, renewable, dnssecActivated or premiumDns. An empty ' +
-    'object lists every domain.',
   getAvailabilities:
     'domainNames: the fully qualified names to check, e.g. ["example.com", "example.lu"].',
 
