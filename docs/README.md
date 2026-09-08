@@ -7,7 +7,7 @@ it.
 
 | Page                              | What it covers                                                             |
 | --------------------------------- | -------------------------------------------------------------------------- |
-| [Tools](tools.md)                 | The 63 tools, the four prompts, and the two resources                      |
+| [Tools](tools.md)                 | The 55 tools, the four prompts, and the two resources                      |
 | [Guardrails](guardrails.md)       | Risk classes, what a deployment can forbid, and confirmation before a call |
 | [Configuration](configuration.md) | Every environment variable, with its default                               |
 

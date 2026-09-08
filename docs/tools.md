@@ -1,30 +1,33 @@
 # Tools
 
-The 79 operations of the OpenAPI document are served by **59 generated tools** — 40 that are
-one operation each, and 19 that stand in for a pair (a listing and its lookup, a create and
-its replace, an on and its off) — plus four hand-written tools: three DNS workflow tools and
-`eurodns_portfolio_refresh`. That is 63 tools with every risk class enabled, and **44** on a
-default deployment, which hides billing and irreversible operations. The history query and the
-compatibility pair are opt-in extras on top.
+The 79 operations of the OpenAPI document are served by **51 generated tools** — 35 that are
+one operation each, and 16 that stand in for several (a listing and its lookup, a create and
+its replace, an on and its off, the same read across five products) — plus four hand-written
+tools: three DNS workflow tools and `eurodns_portfolio_refresh`. That is 55 tools with every
+risk class enabled, and **36** on a default deployment, which hides billing and irreversible
+operations. The history query and the compatibility pair are opt-in extras on top.
 
-| Area              | Default | All | Covers                                                       |
-| ----------------- | ------: | --: | ------------------------------------------------------------ |
-| `dns`             |      14 |  14 | Zones, records, zone profiles, snapshots, DNSSEC signing     |
-| `ssl`             |       6 |  12 | Subscriptions, certificates, validation, reissue, revoke     |
-| `premium_dns`     |       1 |   7 | Premium DNS subscriptions and their lifecycle                |
-| `contact`         |       4 |   5 | Reusable contact profiles, default states, validation emails |
-| `email`           |       4 |   5 | Mailbox subscriptions, aliases, catch-all, passwords         |
-| `domain`          |       4 |   4 | Domain lookup, search, availability, DNSSEC at the registry  |
-| `https_redirect`  |       1 |   4 | HTTPS redirect subscriptions                                 |
-| `nameserver`      |       2 |   3 | Reusable nameserver profiles                                 |
-| `subscription`    |       1 |   2 | Cross-product search, auto-renewal settings                  |
-| `account`         |       1 |   1 | Prepaid balance                                              |
-| `invoice`         |       1 |   1 | Invoice lookup and search                                    |
-| `invoice_profile` |       1 |   1 | Customer invoice profiles                                    |
-| `microsoft`       |       1 |   1 | Microsoft subscriptions                                      |
-| `order`           |       1 |   1 | Orders and per-line delivery status                          |
-| `portfolio`       |       1 |   1 | Refreshing the cached domain list behind completion          |
-| `tld`             |       1 |   1 | TLD terms and requirements                                   |
+| Area              | Default | All | Covers                                                                    |
+| ----------------- | ------: | --: | ------------------------------------------------------------------------- |
+| `dns`             |      12 |  12 | Zones, records, zone profiles, snapshots, DNSSEC status                   |
+| `ssl`             |       5 |  11 | Certificates, validation, reissue; ordering, renewal, revocation          |
+| `premium_dns`     |       0 |   6 | Premium DNS ordering, renewal, upgrade, downgrade, reactivation, deletion |
+| `contact`         |       4 |   5 | Reusable contact profiles, default states, validation emails              |
+| `email`           |       3 |   4 | Aliases, catch-all, passwords; mailbox deletion                           |
+| `domain`          |       3 |   3 | Domain lookup and search, availability, DNSSEC at the registry or zone    |
+| `https_redirect`  |       0 |   3 | HTTPS redirect ordering, renewal, deletion                                |
+| `nameserver`      |       2 |   3 | Reusable nameserver profiles                                              |
+| `subscription`    |       1 |   2 | Every product's subscriptions, one tool; auto-renewal settings            |
+| `account`         |       1 |   1 | Prepaid balance                                                           |
+| `invoice`         |       1 |   1 | Invoice lookup and search                                                 |
+| `invoice_profile` |       1 |   1 | Customer invoice profiles                                                 |
+| `order`           |       1 |   1 | Orders and per-line delivery status                                       |
+| `portfolio`       |       1 |   1 | Refreshing the cached domain list behind completion                       |
+| `tld`             |       1 |   1 | TLD terms and requirements                                                |
+
+The reads of the five subscription products — SSL, email, Premium DNS, Microsoft and HTTPS
+redirect — live under `subscription`, as one tool with a `product` argument; the `microsoft`
+area has nothing else, so it no longer appears.
 
 Every tool name is prefixed with `eurodns_` so it cannot collide with another server's, and
 carries `readOnlyHint`, `destructiveHint` and `idempotentHint` annotations derived from what
@@ -32,19 +35,25 @@ the operation actually does. The one exception is deliberate and opt-in: `EURODN
 adds an unprefixed `search`/`fetch` pair for clients that require those exact names — see
 [Protocol](protocol.md).
 
-Every tool and every argument carries a hand-written description: what the tool does and
-returns, when to prefer it over its neighbours by their exact names, and what each argument
-means and where its value comes from. The vendor's document says what an endpoint is called,
-not what it is for, and left 110 of its 127 parameters undescribed; `tests/descriptions.test.ts`
-holds the whole surface to that standard, so a tool that restates its title or an `id` that
-does not say which object it names fails the build.
+Every tool and every argument carries a hand-written description, in one shape: what the tool
+does and returns, first; when to use it **and when not to**, naming the neighbour by its exact
+name; what it does that the annotations cannot say — an email sent, a document replaced whole,
+a 404 on an unknown id; and what the schema cannot say about the arguments, so at least one is
+named in the prose. The vendor's document says what an endpoint is called, not what it is for,
+and left 110 of its 127 parameters undescribed. `tests/descriptions.test.ts` holds the whole
+surface to that shape, so a tool that restates its title, omits the when-not, names no
+argument, or cites — on a default deployment — a tool that deployment hides, fails the build.
+See [How the descriptions are scored](#how-the-descriptions-are-scored) for what a registry
+measures on top.
 
-## One tool for a pair of operations
+## One tool for several operations
 
 The document exposes its collections as pairs — `GET /invoices` and `GET /invoices/{id}`,
 `POST /contact-profiles` and `PUT /contact-profiles/{id}`, `/sign` and `/unsign` — and a tool
 per endpoint made the model choose between twins that differ only in whether it holds an id.
-Each pair is now one tool whose arguments carry that choice, under three conventions:
+The same held across products: five subscription reads that differed only in the product, and
+two DNSSEC switches that differed only in where they act. Each such group is now one tool whose
+arguments carry that choice, under four conventions:
 
 - **`…_get_<object>`** returns one item when `id` is given and lists or searches them, with the
   listing's own filters and pagination, when it is omitted. The id argument is always `id`,
@@ -54,36 +63,53 @@ Each pair is now one tool whose arguments carry that choice, under three convent
   why the description tells you to read the object first.
 - **`…_set_<thing>`** flips one setting: `enabled` true or false for DNSSEC and the catch-all,
   `action` `add` or `remove` for a mailbox alias.
+- **An enum chooses the member** where the operations differ in one word: `scope` `registry`
+  or `zone` on `eurodns_domain_set_dnssec`; `product` on `eurodns_subscription_get`, which
+  searches every product when it is omitted, lists one product when it is given alone, and
+  returns one subscription with `id`. `eurodns_domain_get` takes `domainName` the way the others
+  take `id`: given, one domain; omitted, the search with its `body` of criteria.
 
-Both halves of a pair always share a risk class, so hiding a class, gating a scope and asking
-for confirmation still apply to a whole tool, and the audit line names the tool that was
-called rather than the operation it resolved to.
+Every member of a tool shares one risk class, so hiding a class, gating a scope and asking for
+confirmation still apply to a whole tool, and the audit line names the tool that was called
+rather than the operation it resolved to.
 
-Names that changed, and what replaces them:
+Names that changed, and what replaces them. The first block is the 0.10 fold of pairs, the
+second the 0.11 fold that closed the gaps a registry's reviewer had named — `domain_search`
+outside the naming pattern, `add_records` next to `upsert_record`, two DNSSEC switches, six
+subscription reads:
 
-| Before                                                                    | Now                                                                                |
-| ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| `eurodns_dns_list_zone_snapshots`                                         | `eurodns_dns_get_zone_snapshot` without `id`                                       |
-| `eurodns_dns_list_zone_profiles`                                          | `eurodns_dns_get_zone_profile` without `id`                                        |
-| `eurodns_dns_create_zone_profile`                                         | `eurodns_dns_save_zone_profile` without `id`                                       |
-| `eurodns_dns_sign_zone` / `eurodns_dns_unsign_zone`                       | `eurodns_dns_set_dnssec` with `enabled` true / false                               |
-| `eurodns_domain_sign` / `eurodns_domain_unsign`                           | `eurodns_domain_set_dnssec` with `enabled` true / false                            |
-| `eurodns_dns_delete_record_by_id`                                         | `eurodns_dns_delete_record` with `recordId`                                        |
-| `eurodns_tld_list`                                                        | `eurodns_tld_get` without `id`                                                     |
-| `eurodns_invoice_list`                                                    | `eurodns_invoice_get` without `id`                                                 |
-| `eurodns_invoice_profile_list`                                            | `eurodns_invoice_profile_get` without `id` (`cipId` is now `id`)                   |
-| `eurodns_order_list`                                                      | `eurodns_order_get` without `id`                                                   |
-| `eurodns_contact_list_profiles`                                           | `eurodns_contact_get_profile` without `id`                                         |
-| `eurodns_contact_create_profile` / `eurodns_contact_update_profile`       | `eurodns_contact_save_profile` without / with `id`                                 |
-| `eurodns_nameserver_list_profiles`                                        | `eurodns_nameserver_get_profile` without `id`                                      |
-| `eurodns_nameserver_create_profile` / `eurodns_nameserver_update_profile` | `eurodns_nameserver_save_profile` without / with `id`                              |
-| `eurodns_email_list_subscriptions`                                        | `eurodns_email_get_subscription` without `id`                                      |
-| `eurodns_email_create_alias` / `eurodns_email_delete_alias`               | `eurodns_email_set_alias` with `action` add / remove                               |
-| `eurodns_email_create_catchall` / `eurodns_email_delete_catchall`         | `eurodns_email_set_catchall` with `enabled` true / false                           |
-| `eurodns_premium_dns_list_subscriptions`                                  | `eurodns_premium_dns_get_subscription` without `id` (`subscriptionId` is now `id`) |
-| `eurodns_ssl_list_subscriptions`                                          | `eurodns_ssl_get_subscription` without `id` (`subscriptionId` is now `id`)         |
-| `eurodns_microsoft_list_subscriptions`                                    | `eurodns_microsoft_get_subscription` without `id`                                  |
-| `eurodns_subscription_list`                                               | `eurodns_subscription_search`                                                      |
+| Before                                                                    | Now                                                                          |
+| ------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `eurodns_dns_list_zone_snapshots`                                         | `eurodns_dns_get_zone_snapshot` without `id`                                 |
+| `eurodns_dns_list_zone_profiles`                                          | `eurodns_dns_get_zone_profile` without `id`                                  |
+| `eurodns_dns_create_zone_profile`                                         | `eurodns_dns_save_zone_profile` without `id`                                 |
+| `eurodns_dns_sign_zone` / `eurodns_dns_unsign_zone`                       | `eurodns_domain_set_dnssec` with `scope` zone and `enabled` true / false     |
+| `eurodns_domain_sign` / `eurodns_domain_unsign`                           | `eurodns_domain_set_dnssec` with `scope` registry and `enabled` true / false |
+| `eurodns_dns_delete_record_by_id`                                         | `eurodns_dns_delete_record` with `recordId`                                  |
+| `eurodns_tld_list`                                                        | `eurodns_tld_get` without `id`                                               |
+| `eurodns_invoice_list`                                                    | `eurodns_invoice_get` without `id`                                           |
+| `eurodns_invoice_profile_list`                                            | `eurodns_invoice_profile_get` without `id` (`cipId` is now `id`)             |
+| `eurodns_order_list`                                                      | `eurodns_order_get` without `id`                                             |
+| `eurodns_contact_list_profiles`                                           | `eurodns_contact_get_profile` without `id`                                   |
+| `eurodns_contact_create_profile` / `eurodns_contact_update_profile`       | `eurodns_contact_save_profile` without / with `id`                           |
+| `eurodns_nameserver_list_profiles`                                        | `eurodns_nameserver_get_profile` without `id`                                |
+| `eurodns_nameserver_create_profile` / `eurodns_nameserver_update_profile` | `eurodns_nameserver_save_profile` without / with `id`                        |
+| `eurodns_email_list_subscriptions`                                        | `eurodns_subscription_get` with `product` email                              |
+| `eurodns_email_create_alias` / `eurodns_email_delete_alias`               | `eurodns_email_set_alias` with `action` add / remove                         |
+| `eurodns_email_create_catchall` / `eurodns_email_delete_catchall`         | `eurodns_email_set_catchall` with `enabled` true / false                     |
+| `eurodns_premium_dns_list_subscriptions`                                  | `eurodns_subscription_get` with `product` premium_dns                        |
+| `eurodns_ssl_list_subscriptions`                                          | `eurodns_subscription_get` with `product` ssl                                |
+| `eurodns_microsoft_list_subscriptions`                                    | `eurodns_subscription_get` with `product` microsoft                          |
+| `eurodns_subscription_list`                                               | `eurodns_subscription_get` without `product`                                 |
+
+| Before (0.10)                                                                                            | Now (0.11)                                                                                   |
+| -------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `eurodns_domain_search`                                                                                  | `eurodns_domain_get` without `domainName`; the criteria stay in `body`                       |
+| `eurodns_dns_add_records`                                                                                | `eurodns_dns_upsert_record` with `append` true, one record per call, validated before saving |
+| `eurodns_dns_set_dnssec`                                                                                 | `eurodns_domain_set_dnssec` with `scope` zone                                                |
+| `eurodns_subscription_search`                                                                            | `eurodns_subscription_get` without `product`                                                 |
+| `eurodns_ssl_get_subscription`, `eurodns_email_get_subscription`, `eurodns_premium_dns_get_subscription` | `eurodns_subscription_get` with `product` ssl / email / premium_dns, and `id` for one        |
+| `eurodns_microsoft_get_subscription`, `eurodns_https_redirect_get_subscription`                          | `eurodns_subscription_get` with `product` microsoft / https_redirect, and `id` for one       |
 
 ## What the model is told before it starts
 
@@ -182,9 +208,12 @@ happens by accident.
 | `eurodns_dns_upsert_record` | Reads the zone, applies one change, validates it with the API, and saves only if validation passes.          |
 | `eurodns_dns_delete_record` | Resolves a record's id from its type and host, then deletes it. Refuses to guess when several records match. |
 
-The raw generated tools (`eurodns_dns_save_zone`, `eurodns_dns_add_records`) remain available
-for callers that know exactly what they are doing, and `eurodns_dns_delete_record` takes a
-raw `recordId` in place of the type-and-host lookup for a caller that has just read the zone.
+The raw zone save (`eurodns_dns_save_zone`) remains available for callers that know exactly
+what they are doing, and `eurodns_dns_delete_record` takes a raw `recordId` in place of the
+type-and-host lookup for a caller that has just read the zone. The raw append the API offers
+is not exposed on its own: `eurodns_dns_upsert_record` with `append` true adds a further record
+under an existing type and host — a second TXT, another MX — and validates it like any other
+change, which the raw endpoint did not.
 
 Three details worth knowing, all of which this server enforces for you:
 
@@ -194,6 +223,32 @@ Three details worth knowing, all of which this server enforces for you:
   172800, 432000, 604800.
 - `MAIL` and `URL` are **not** record types. They are pseudo types for the zone's mail and
   URL forwards, which carry different fields. The record tools refuse them and say so.
+
+## How the descriptions are scored
+
+The registries that list this server score every tool definition. Glama's rubric, TDQS
+([glama-ai/tool-definition-quality-score](https://github.com/glama-ai/tool-definition-quality-score)),
+asks six questions of a description — is the purpose clear, does it say when and when not,
+does it disclose behaviour the annotations cannot, does it add meaning the schema lacks, is it
+concise, is it complete for its complexity — and four of a server: are the tools distinct,
+consistently named, the right number, and a complete lifecycle. The six answers come from a
+language model. The shape every description here follows, and the rules the test enforces,
+are the rubric's gaps read back: a schema that is fully described earns a floor of 3 out of 5
+on parameter semantics unless the prose adds something, and when-not guidance is scored apart
+from when-to.
+
+What the rubric defines as arithmetic is reproduced in `scripts/tdqs/signals.ts` and run by
+`npm run tdqs`, locally and by the **Tool definition quality** workflow on every push: the
+contextual signals (parameter counts, schema coverage, depth, unions, an invocation cost), the
+hard gates (no description, a description that is the name, prose that contradicts an
+annotation), the tool-count anchor, and the shadowing candidates — pairs where a much cheaper
+sibling might cover the dearer one's purpose, listed within one area for a reader to judge.
+The workflow uploads the raw `tools/list` of both deployments as an artifact, which is what a
+model actually reads. No model is called: the dimension scores stay the registry's to give.
+
+The tool count sits at 36 by default, which the rubric anchors as "too many" until 25 and
+"borderline" until 15. The count is the honest size of an API with seventy-nine operations,
+and folding further would trade purpose clarity, which the rubric weights most, for a number.
 
 ---
 

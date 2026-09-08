@@ -18,6 +18,7 @@ npm run lint
 npm run format:check
 npm test
 npm run coverage
+npm run tdqs        # the registries' deterministic score of the tool surface, no model
 ```
 
 Run `typecheck`, `lint`, `format:check` and `coverage` before proposing a change. They are what
@@ -34,6 +35,11 @@ test fixtures that no longer compile.
 `naming.ts`, tool text in `overrides.ts` and `composites.ts`, argument text in
 `parameters.ts` — then run `npm run gen`. CI regenerates the
 output and fails if what you committed has drifted.
+
+**A description has a shape, and a test holds it.** What the tool does and returns; when to
+use it and when not, naming the neighbour; what it does that the annotations cannot say; and
+at least one argument named in the prose. `tests/descriptions.test.ts` says which rule a new
+description breaks, and refuses a default-visible tool that cites a tool hidden by default.
 
 **Coverage thresholds in `vitest.config.ts` are pinned to the exact current measurement.** Raise
 them when a change raises coverage; never lower one to make a pull request pass. A threshold
@@ -67,7 +73,7 @@ demonstrate its shape.
 | `src/auth/`           | Token verification, scopes, and the guardrail evaluation                                                                                          |
 | `src/services/`       | The upstream HTTP client and result rendering                                                                                                     |
 | `src/instructions.ts` | What the server tells a model about itself in the handshake                                                                                       |
-| `scripts/`            | The generator                                                                                                                                     |
+| `scripts/`            | The generator, and `tdqs/` — the deterministic half of the registries' tool-definition score, run by `npm run tdqs` and a workflow                |
 | `spec/openapi.json`   | The vendored upstream contract                                                                                                                    |
 | `tests/`              | Vitest, driving a real MCP client over an in-memory transport                                                                                     |
 
