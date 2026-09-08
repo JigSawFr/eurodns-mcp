@@ -50,8 +50,9 @@ export const NAME_OVERRIDES: Record<string, string> = {
   getEmailSubscriptions: 'eurodns_email_list_subscriptions',
   getPremiumDnsSubscriptions: 'eurodns_premium_dns_list_subscriptions',
   getMicrosoftSubscriptions: 'eurodns_microsoft_list_subscriptions',
-  // `search`, like `eurodns_domain_search`: the one cross-product query, filtered rather
-  // than keyed. The product-specific tools are `..._get_subscription`, one per product.
+  // The names below this line are what the operations would be called on their own. Most
+  // are absorbed by a composite today (`composites.ts`) and never registered, but the
+  // derivation still has to be stable: `toolScopeIndex` and the tests map every operation.
   getSubscriptions: 'eurodns_subscription_search',
   getContactProfiles: 'eurodns_contact_list_profiles',
   getNameserverProfiles: 'eurodns_nameserver_list_profiles',
@@ -96,8 +97,8 @@ export function areaFor(operation: GeneratedOperation): string {
  *
  * Every name is prefixed with `eurodns_` so it cannot collide with tools from another
  * server, then with the domain prefix. Domain words already carried by the operation id are
- * dropped, so `getSslSubscription` under the `ssl` prefix becomes `eurodns_ssl_get_subscription`
- * rather than `eurodns_ssl_get_ssl_subscription`.
+ * dropped, so `getSslCertificate` under the `ssl` prefix becomes `eurodns_ssl_get_certificate`
+ * rather than `eurodns_ssl_get_ssl_certificate`.
  */
 export function toolNameFor(operation: GeneratedOperation): string {
   const override = NAME_OVERRIDES[operation.operationId];

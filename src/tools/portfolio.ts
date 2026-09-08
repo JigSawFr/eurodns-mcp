@@ -16,7 +16,7 @@ import type { ToolContext } from './context.js';
  * told "wait up to ten minutes" is a worse answer than a command that takes a second.
  *
  * It is a read, and annotated as one: it fetches a list the caller could already fetch with
- * `eurodns_domain_search` and changes nothing upstream.
+ * `eurodns_domain_get` and changes nothing upstream.
  */
 export function registerPortfolioTools(server: McpServer, context: ToolContext): number {
   server.registerTool(
@@ -24,10 +24,11 @@ export function registerPortfolioTools(server: McpServer, context: ToolContext):
     {
       title: 'Refresh the cached domain list',
       description:
-        'Re-reads the account’s domains, so a name registered or transferred moments ago ' +
-        'appears in completion without waiting for the cache to expire. Use it right after ' +
-        'such a change; it alters nothing upstream, and the domains themselves are listed by ' +
-        'eurodns_domain_search.',
+        'Re-reads the account’s domain list that backs name completion, so a domain registered or ' +
+        'transferred moments ago appears in suggestions without waiting for the cache to expire, ' +
+        'and returns how many domains were loaded. Use it right after such a change, not as a way ' +
+        'to list domains: that is eurodns_domain_get called without a domainName. It alters ' +
+        'nothing upstream.',
       inputSchema: z.object({}),
       outputSchema: z.object({
         domains: z.number().int(),

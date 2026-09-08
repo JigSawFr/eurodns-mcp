@@ -26,9 +26,10 @@ async function call(name: string, args: Record<string, unknown>, body: unknown =
 }
 
 describe('the composite tools', () => {
-  it('each stand in for two operations of one risk class', () => {
+  it('each stand in for at least two operations of one risk class', () => {
     for (const composite of COMPOSITES) {
-      expect(composite.members).toHaveLength(2);
+      expect(composite.members.length).toBeGreaterThanOrEqual(2);
+      expect(new Set(composite.members).size).toBe(composite.members.length);
       for (const id of composite.members) {
         expect(memberOperation(id).risk, `${composite.name} <- ${id}`).toBe(composite.risk);
         expect(ABSORBED_OPERATION_IDS.has(id), id).toBe(true);
@@ -60,10 +61,22 @@ describe('the composite tools', () => {
       'eurodns_email_create_alias',
       'eurodns_email_delete_catchall',
       'eurodns_dns_delete_record_by_id',
+      // Folded in 0.11: the search into the get, the raw append into the upsert, the two
+      // DNSSEC switches into one, and the six subscription reads into one.
+      'eurodns_domain_search',
+      'eurodns_dns_add_records',
+      'eurodns_dns_set_dnssec',
+      'eurodns_subscription_search',
+      'eurodns_ssl_get_subscription',
+      'eurodns_email_get_subscription',
+      'eurodns_premium_dns_get_subscription',
+      'eurodns_microsoft_get_subscription',
+      'eurodns_https_redirect_get_subscription',
     ]) {
       expect(names.has(gone), gone).toBe(false);
     }
-    expect(names.has('eurodns_subscription_search')).toBe(true);
+    expect(names.has('eurodns_subscription_get')).toBe(true);
+    expect(names.has('eurodns_domain_get')).toBe(true);
 
     expect(names.size).toBe(toolCount);
     expect(toolCount).toBe(OPERATIONS.length - ABSORBED_OPERATION_IDS.size + COMPOSITES.length + 4);
@@ -104,7 +117,8 @@ describe('the composite tools', () => {
 
     expect(names.has('eurodns_contact_get_profile')).toBe(true);
     expect(names.has('eurodns_contact_save_profile')).toBe(false);
-    expect(names.has('eurodns_dns_set_dnssec')).toBe(false);
+    expect(names.has('eurodns_domain_set_dnssec')).toBe(false);
+    expect(names.has('eurodns_subscription_get')).toBe(true);
   });
 });
 
@@ -132,7 +146,7 @@ describe('a get-or-list composite', () => {
     const { requests } = await call('eurodns_invoice_profile_get', { id: 3 });
     expect(requests[0]?.url).toBe(`${BASE}/customer-invoice-profiles/3`);
 
-    const ssl = await call('eurodns_ssl_get_subscription', { id: 9 });
+    const ssl = await call('eurodns_subscription_get', { product: 'ssl', id: 9 });
     expect(ssl.requests[0]?.url).toBe(`${BASE}/ssl-subscriptions/9`);
   });
 
@@ -145,10 +159,115 @@ describe('a get-or-list composite', () => {
   });
 
   it('exposes the listing’s own filters', async () => {
-    const { requests } = await call('eurodns_ssl_get_subscription', {
+    const { requests } = await call('eurodns_contact_get_profile', { type: 'COMPANY' });
+    expect(requests[0]?.url).toBe(`${BASE}/contact-profiles?type=COMPANY`);
+  });
+});
+
+describe('the get-or-search composite', () => {
+  it('fetches one domain when given its name', async () => {
+    const { requests } = await call('eurodns_domain_get', { domainName: 'example.com' });
+    expect(requests).toHaveLength(1);
+    expect(requests[0]?.method).toBe('GET');
+    expect(requests[0]?.url).toBe(`${BASE}/domains/example.com`);
+    expect(requests[0]?.body).toBeUndefined();
+  });
+
+  it('searches with the body and pagination when the name is omitted', async () => {
+    const { requests } = await call('eurodns_domain_get', {
+      body: { renewable: true },
+      page: 2,
+      size: 50,
+    });
+    expect(requests[0]?.method).toBe('POST');
+    expect(requests[0]?.url).toBe(`${BASE}/domains/search`);
+    expect(requests[0]?.body).toEqual({ renewable: true });
+    expect(requests[0]?.headers['pagination-page']).toBe('2');
+    expect(requests[0]?.headers['pagination-size']).toBe('50');
+  });
+
+  it('lists everything with an empty body when called with nothing at all', async () => {
+    const { requests } = await call('eurodns_domain_get', {});
+    expect(requests[0]?.method).toBe('POST');
+    expect(requests[0]?.body).toEqual({});
+  });
+
+  it('drops a body or a page sent along with the name rather than carrying them', async () => {
+    const { requests } = await call('eurodns_domain_get', {
+      domainName: 'example.com',
+      body: { renewable: true },
+      page: 3,
+    });
+    expect(requests[0]?.url).toBe(`${BASE}/domains/example.com`);
+    expect(requests[0]?.headers['pagination-page']).toBeUndefined();
+  });
+});
+
+describe('the subscription composite', () => {
+  it('searches every product when neither product nor id is given', async () => {
+    const { requests } = await call('eurodns_subscription_get', {
+      subscriptionStatus: 'ACTIVE',
+      autoRenewEnabled: false,
+    });
+    expect(requests).toHaveLength(1);
+    expect(requests[0]?.url).toBe(
+      `${BASE}/subscriptions?subscription-status=ACTIVE&auto-renew-enabled=false`,
+    );
+  });
+
+  it('lists one product with its own filters when only the product is given', async () => {
+    const ssl = await call('eurodns_subscription_get', {
+      product: 'ssl',
       commonName: 'www.example.com',
     });
-    expect(requests[0]?.url).toBe(`${BASE}/ssl-subscriptions?common-name=www.example.com`);
+    expect(ssl.requests[0]?.url).toBe(`${BASE}/ssl-subscriptions?common-name=www.example.com`);
+
+    const email = await call('eurodns_subscription_get', { product: 'email', userName: 'ops' });
+    expect(email.requests[0]?.url).toBe(`${BASE}/email-subscriptions?user-name=ops`);
+
+    const microsoft = await call('eurodns_subscription_get', {
+      product: 'microsoft',
+      microsoftDomain: 'example.onmicrosoft.com',
+    });
+    expect(microsoft.requests[0]?.url).toBe(
+      `${BASE}/microsoft-subscriptions?microsoft-domain=example.onmicrosoft.com`,
+    );
+  });
+
+  it('drops a filter the chosen product does not have rather than sending it', async () => {
+    const { requests } = await call('eurodns_subscription_get', {
+      product: 'premium_dns',
+      commonName: 'www.example.com',
+      domainName: 'example.com',
+    });
+    expect(requests[0]?.url).toBe(`${BASE}/premium-dns-subscriptions?domain-name=example.com`);
+  });
+
+  it('fetches one subscription on the product’s own path and id name', async () => {
+    const email = await call('eurodns_subscription_get', { product: 'email', id: 4 });
+    expect(email.requests[0]?.url).toBe(`${BASE}/email-subscriptions/4`);
+
+    const premium = await call('eurodns_subscription_get', { product: 'premium_dns', id: 5 });
+    expect(premium.requests[0]?.url).toBe(`${BASE}/premium-dns-subscriptions/5`);
+
+    const redirect = await call('eurodns_subscription_get', { product: 'https_redirect', id: 6 });
+    expect(redirect.requests[0]?.url).toBe(`${BASE}/https-redirect-subscriptions/6`);
+  });
+
+  it('serves a product without a listing through the cross-product search', async () => {
+    const { requests } = await call('eurodns_subscription_get', {
+      product: 'https_redirect',
+      subscriptionStatus: 'ACTIVE',
+    });
+    expect(requests[0]?.url).toBe(
+      `${BASE}/subscriptions?subscription-status=ACTIVE&subscription-types=HTTPS_REDIRECT`,
+    );
+  });
+
+  it('refuses an id without its product before anything is sent', async () => {
+    const { result, requests } = await call('eurodns_subscription_get', { id: 9 });
+    expect(isError(result)).toBe(true);
+    expect(requests).toHaveLength(0);
   });
 });
 
@@ -181,27 +300,48 @@ describe('a create-or-update composite', () => {
 });
 
 describe('a switch composite', () => {
-  it('signs or unsigns a zone on the flag', async () => {
-    const on = await call('eurodns_dns_set_dnssec', { domainName: 'example.com', enabled: true });
+  it('signs or unsigns the hosted zone under scope zone', async () => {
+    const on = await call('eurodns_domain_set_dnssec', {
+      domainName: 'example.com',
+      scope: 'zone',
+      enabled: true,
+    });
     expect(on.requests[0]?.method).toBe('POST');
     expect(on.requests[0]?.url).toBe(`${BASE}/dns-zones/example.com/sign`);
 
-    const off = await call('eurodns_dns_set_dnssec', { domainName: 'example.com', enabled: false });
+    const off = await call('eurodns_domain_set_dnssec', {
+      domainName: 'example.com',
+      scope: 'zone',
+      enabled: false,
+    });
     expect(off.requests[0]?.url).toBe(`${BASE}/dns-zones/example.com/unsign`);
   });
 
-  it('publishes or withdraws a domain’s DS records on the flag', async () => {
+  it('publishes or withdraws a domain’s DS records under scope registry', async () => {
     const on = await call('eurodns_domain_set_dnssec', {
       domainName: 'example.com',
+      scope: 'registry',
       enabled: true,
     });
     expect(on.requests[0]?.url).toBe(`${BASE}/domains/example.com/sign`);
+    // The choosing arguments are consumed here, never sent upstream.
+    expect(on.requests[0]?.url).not.toContain('scope');
 
     const off = await call('eurodns_domain_set_dnssec', {
       domainName: 'example.com',
+      scope: 'registry',
       enabled: false,
     });
     expect(off.requests[0]?.url).toBe(`${BASE}/domains/example.com/unsign`);
+  });
+
+  it('refuses a DNSSEC call without a scope before anything is sent', async () => {
+    const { result, requests } = await call('eurodns_domain_set_dnssec', {
+      domainName: 'example.com',
+      enabled: true,
+    });
+    expect(isError(result)).toBe(true);
+    expect(requests).toHaveLength(0);
   });
 
   it('adds or removes an alias on the action', async () => {

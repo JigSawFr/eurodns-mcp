@@ -24,8 +24,8 @@ import { MAX_PAGE_SIZE } from '../constants.js';
  * them on is accepting that `search` and `fetch` may now mean two things at once to a shared
  * client, which is a reasonable trade to make deliberately and a bad one to inherit.
  *
- * Both are reads over operations already exposed as `eurodns_domain_search` and
- * `eurodns_domain_get`. They add reach, not capability.
+ * Both are reads over the two operations `eurodns_domain_get` already exposes — the search
+ * and the lookup. They add reach, not capability.
  */
 export function registerCompatTools(server: McpServer, context: ToolContext): number {
   if (!context.config.compat.searchFetch) return 0;
@@ -68,8 +68,10 @@ function registerSearch(server: McpServer, context: ToolContext): void {
     {
       title: 'Search domains in this account',
       description:
-        'Finds domains in this account matching a search term and returns one result per ' +
-        'domain. Use it to locate a domain by name; pass a result’s id to fetch for the ' +
+        'Finds domains in this account whose name matches query and returns one result per ' +
+        'domain, with an id, a title and a short text. Use it to locate a domain by name; it ' +
+        'searches the account’s own portfolio only, never the public registry, so a name not held ' +
+        'here returns nothing rather than an availability. Pass a result’s id to fetch for the ' +
         'full record.',
       inputSchema: z.object({
         query: z.string().describe('Free text matched against the account’s domain names.'),
@@ -126,9 +128,10 @@ function registerFetch(server: McpServer, context: ToolContext): void {
     {
       title: 'Fetch one domain record',
       description:
-        'Returns the full registry record for one domain, given the id a search result ' +
-        'carried. For this server that id is the domain name itself, so use it directly ' +
-        'when you already know the name.',
+        'Returns the full registry record for one domain in this account, given the id a search ' +
+        'result carried. For this server that id is the domain name itself, so pass the name ' +
+        'directly when you already know it rather than searching first. A domain not held in this ' +
+        'account answers 404.',
       inputSchema: z.object({
         id: z.string().describe('The domain name, as returned by search.'),
       }),
