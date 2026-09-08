@@ -50,7 +50,8 @@
     "lint": "eslint . --max-warnings 0",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "coverage": "vitest run --coverage"
+    "coverage": "vitest run --coverage",
+    "tdqs": "tsx scripts/tool-quality.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/express": "^2.0.0",

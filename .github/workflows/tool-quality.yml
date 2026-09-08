@@ -1,0 +1,50 @@
+name: Tool definition quality
+
+# The registries that list this server score every tool definition — Glama with the TDQS
+# rubric — and the score is a first impression a model and a person both read before they
+# try a single call. Most of that rubric is a language model's judgement and is not
+# reproduced here. What it defines as arithmetic is: the contextual signals an evaluator is
+# handed, the hard gates (no description, a description that is the name, prose that
+# contradicts an annotation), the tool-count anchor and the shadowing candidates. This runs
+# exactly that, on the listing a registry would see and on the full surface, and puts the
+# report in the job summary with the raw `tools/list` as an artifact.
+#
+# It runs on pull requests, unlike spec-drift.yml and link-check.yml, because it depends on
+# nothing outside the repository: no network, no key, no third party that could make an
+# unrelated pull request intermittently red. The prose itself is held to the rubric's shape
+# by `tests/descriptions.test.ts` in the CI workflow; this is the measurement, not the rule.
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  score:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          cache: npm
+
+      # `--ignore-scripts` on purpose: `prepare` builds the whole package, and the scorer runs
+      # the sources through tsx. ci.yml is where that path is exercised.
+      - run: npm ci --ignore-scripts
+
+      - name: Score the tool definitions
+        run: npm run tdqs -- --out tdqs
+
+      # What a model actually reads, for both deployments, plus the rendered report. Two of
+      # these from two commits show a change to the surface more plainly than the source diff.
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        if: always()
+        with:
+          name: tool-catalogue
+          path: tdqs/
+          retention-days: 30
