@@ -18,7 +18,7 @@ npm run lint
 npm run format:check
 npm test
 npm run coverage
-npm run tdqs        # the registries' deterministic score of the tool surface, no model
+npm run tdqs        # the registries' reference linter (mcp-tdqs) over the tool surface, no model
 ```
 
 Run `typecheck`, `lint`, `format:check` and `coverage` before proposing a change. They are what
@@ -73,7 +73,7 @@ demonstrate its shape.
 | `src/auth/`           | Token verification, scopes, and the guardrail evaluation                                                                                          |
 | `src/services/`       | The upstream HTTP client and result rendering                                                                                                     |
 | `src/instructions.ts` | What the server tells a model about itself in the handshake                                                                                       |
-| `scripts/`            | The generator, and `tdqs/` — the deterministic half of the registries' tool-definition score, run by `npm run tdqs` and a workflow                |
+| `scripts/`            | The generator, and the tool catalogue that `npm run tdqs` hands to `mcp-tdqs`, the registries' reference linter, locally and in a workflow        |
 | `spec/openapi.json`   | The vendored upstream contract                                                                                                                    |
 | `tests/`              | Vitest, driving a real MCP client over an in-memory transport                                                                                     |
 

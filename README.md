@@ -36,7 +36,7 @@ domains, DNS zones, contacts, subscriptions, SSL, invoices and orders.
 - **Every tool and argument described** for the model that reads them: what it does and
   returns, when to prefer its neighbour and when not to, what it does that the annotations
   cannot say, where an id comes from. A test holds the whole surface to it, and a workflow
-  scores it the way the registries do.
+  runs the registries' own linter over it.
 - **Three DNS workflow tools** that make record edits safe, because saving a zone replaces it.
 - **Guardrails** so a deployment can refuse operations that spend money or destroy things.
 - **Four prompts** for the workflows worth naming, and **two resources**: the portfolio,

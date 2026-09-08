@@ -7,3 +7,6 @@ dist/
 coverage/
 *.log
 .DS_Store
+
+# Written by `npm run tdqs`: the tool catalogue and the linter's reports.
+tdqs/

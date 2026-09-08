@@ -237,14 +237,23 @@ are the rubric's gaps read back: a schema that is fully described earns a floor 
 on parameter semantics unless the prose adds something, and when-not guidance is scored apart
 from when-to.
 
-What the rubric defines as arithmetic is reproduced in `scripts/tdqs/signals.ts` and run by
-`npm run tdqs`, locally and by the **Tool definition quality** workflow on every push: the
-contextual signals (parameter counts, schema coverage, depth, unions, an invocation cost), the
-hard gates (no description, a description that is the name, prose that contradicts an
-annotation), the tool-count anchor, and the shadowing candidates — pairs where a much cheaper
-sibling might cover the dearer one's purpose, listed within one area for a reader to judge.
-The workflow uploads the raw `tools/list` of both deployments as an artifact, which is what a
-model actually reads. No model is called: the dimension scores stay the registry's to give.
+Glama publishes the reference implementation as [`mcp-tdqs`](https://tdqs.dev), and its
+linter is what `npm run tdqs` runs, locally and in the **Tool definition quality** workflow on
+every push: the stages of the pipeline that need no model — the contextual signals (parameter
+counts, schema coverage, an invocation cost), the hard gates (no description, a description
+that is the name), the shadow prefilter and the checklist the specification ranks highest
+(annotations declared, every argument described, an output schema). A gate fails the run. The
+workflow uploads the raw `tools/list` of both deployments as an artifact, which is what a model
+actually reads, and lints the listing a marketplace gets when it spawns the published command
+with no credentials.
+
+The one warning the linter leaves standing is the shadow candidates: the prefilter pairs any
+tool with any materially cheaper sibling across the whole server, so a zone save is paired with
+the prepaid-balance read. Only the coherence evaluation — a model call — can confirm that two
+purposes overlap, and on this surface they do not. No model is called in CI: the full
+`tdqs score` needs a key and gives a different number to the same text on two runs, so the
+dimension scores stay the registry's to give. To see them locally, point the CLI at an
+OpenAI-compatible endpoint and run `tdqs score --file tdqs/default.json` after `npm run tdqs`.
 
 The tool count sits at 36 by default, which the rubric anchors as "too many" until 25 and
 "borderline" until 15. The count is the honest size of an API with seventy-nine operations,
