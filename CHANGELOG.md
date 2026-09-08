@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.11.0](https://github.com/JigSawFr/eurodns-mcp/compare/v0.10.0...v0.11.0) (2026-09-08)
+
+
+### ⚠ BREAKING CHANGES
+
+* `eurodns_domain_search`, `eurodns_dns_add_records`, `eurodns_dns_set_dnssec`, `eurodns_subscription_search`, `eurodns_ssl_get_subscription`, `eurodns_email_get_subscription`, `eurodns_premium_dns_get_subscription`, `eurodns_microsoft_get_subscription` and `eurodns_https_redirect_get_subscription` are gone; docs/tools.md maps each to its replacement and arguments.
+
+### Features
+
+* fold four tool groups, describe every tool for the TDQS rubric, and score the surface in CI ([#87](https://github.com/JigSawFr/eurodns-mcp/issues/87)) ([a62e9dc](https://github.com/JigSawFr/eurodns-mcp/commit/a62e9dcebdb30982bd7322fc6af0a84c7798ac4f))
+
 ## [0.10.0](https://github.com/JigSawFr/eurodns-mcp/compare/v0.9.1...v0.10.0) (2026-09-07)
 
 
