@@ -30,9 +30,9 @@ domains, DNS zones, contacts, subscriptions, SSL, invoices and orders.
 
 ## What you get
 
-- **Full API coverage in 36 tools** — every one of the 79 API operations, with each list/get
+- **Full API coverage in 43 tools** — every one of the 94 API operations, with each list/get
   pair, profile create/update pair, on/off toggle and per-product read folded into one tool;
-  55 tools once billing and irreversible operations are enabled.
+  67 tools once billing and irreversible operations are enabled.
 - **Every tool and argument described** for the model that reads them: what it does and
   returns, when to prefer its neighbour and when not to, what it does that the annotations
   cannot say, where an id comes from. A test holds the whole surface to it, and a workflow
@@ -147,7 +147,7 @@ ways around it.
 
 | Page                                     | What it covers                                                          |
 | ---------------------------------------- | ----------------------------------------------------------------------- |
-| [Tools](docs/tools.md)                   | All 55 tools, the operations they fold, the prompts and the resources   |
+| [Tools](docs/tools.md)                   | All 67 tools, the operations they fold, the prompts and the resources   |
 | [Guardrails](docs/guardrails.md)         | Risk classes, what a deployment can forbid, confirmation before a call  |
 | [Configuration](docs/configuration.md)   | Every environment variable, with its default                            |
 | [HTTP transport](docs/http-transport.md) | Serving several clients, static tokens, OAuth 2.1 and scopes            |

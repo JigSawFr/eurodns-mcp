@@ -9,6 +9,7 @@ import type { GeneratedOperation } from '../generated/operations.js';
  */
 export const TAG_PREFIXES: Record<string, string> = {
   AccountService: 'account',
+  AcmeSslSubscriptionService: 'acme_ssl',
   ContactProfileService: 'contact',
   ContactValidationService: 'contact_validation',
   CustomerInvoiceProfileService: 'invoice_profile',
@@ -47,6 +48,8 @@ export const NAME_OVERRIDES: Record<string, string> = {
   getAvailabilities: 'eurodns_domain_check_availability',
   // Plural/singular pairs, made explicit.
   getSslSubscriptions: 'eurodns_ssl_list_subscriptions',
+  // The document calls this one `getSslSubscriptions` too; the generator gives it this id.
+  getAcmeSslSubscriptions: 'eurodns_acme_ssl_list_subscriptions',
   getEmailSubscriptions: 'eurodns_email_list_subscriptions',
   getPremiumDnsSubscriptions: 'eurodns_premium_dns_list_subscriptions',
   getMicrosoftSubscriptions: 'eurodns_microsoft_list_subscriptions',
@@ -71,6 +74,12 @@ export const NAME_OVERRIDES: Record<string, string> = {
   // `getProfile` and `getSnapShot` are zone-scoped despite their generic ids.
   getProfile: 'eurodns_dns_get_zone_profile',
   getSnapShot: 'eurodns_dns_get_zone_snapshot',
+  // The subscription is a path parameter on these three, so its word in the name only
+  // lengthens what a model has to type to reach the organisation profile.
+  getAcmeSslSubscriptionOrganisationProfiles: 'eurodns_acme_ssl_get_organisation_profiles',
+  updateAcmeSslSubscriptionOrganisationProfile: 'eurodns_acme_ssl_update_organisation_profile',
+  cancelAcmeSslSubscriptionOrganisationProfileValidation:
+    'eurodns_acme_ssl_cancel_organisation_profile_validation',
 };
 
 /** `getDnsZone` -> `get_dns_zone`, handling runs of capitals sensibly. */

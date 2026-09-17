@@ -22,7 +22,9 @@ export default defineConfig({
         // Up 0.22 from 93.42 with the second consolidation: the get-or-search, choose-among
         // and subscription routers are each driven through every branch by
         // `tests/composites.test.ts`, and the upsert's `append` path by `tests/dns.test.ts`.
-        statements: 93.64,
+        // Up 0.01, 0.02 and 0.01 with the ACME SSL area: its switch and its product in the
+        // subscription tool are routed through the existing factories, each with a test.
+        statements: 93.65,
         // Branches sit below the rest because three `??` fallbacks in server.ts guard a
         // `createRequire` that only fails in a layout this package does not produce. Up
         // 0.71 from 87.51 with the same change — and two branches no call could reach were
@@ -32,8 +34,8 @@ export default defineConfig({
         // Up 0.51 from 93.3: the three composite factories, their routers, `areaFor`,
         // `titleFor` and the two resolvers are all called. The eighteen uncovered functions
         // are still entry points and signal handlers. Up 0.22 with three more factories.
-        functions: 94.03,
-        lines: 94.44,
+        functions: 94.05,
+        lines: 94.45,
       },
     },
   },

@@ -72,6 +72,12 @@ describe('the composite tools', () => {
       'eurodns_premium_dns_get_subscription',
       'eurodns_microsoft_get_subscription',
       'eurodns_https_redirect_get_subscription',
+      // Folded on arrival: the ACME SSL reads into the subscription tool, the account
+      // suspend/reinstate pair into one switch.
+      'eurodns_acme_ssl_list_subscriptions',
+      'eurodns_acme_ssl_get_subscription',
+      'eurodns_acme_ssl_suspend_account',
+      'eurodns_acme_ssl_reinstate_account',
     ]) {
       expect(names.has(gone), gone).toBe(false);
     }
@@ -254,6 +260,19 @@ describe('the subscription composite', () => {
     expect(redirect.requests[0]?.url).toBe(`${BASE}/https-redirect-subscriptions/6`);
   });
 
+  it('lists and fetches ACME SSL subscriptions on their own path, apart from classic SSL', async () => {
+    // The document gives both listings the same operation id; this is the call that would
+    // have gone to /ssl-subscriptions had the generator not told them apart.
+    const list = await call('eurodns_subscription_get', { product: 'acme_ssl', renewable: true });
+    expect(list.requests[0]?.url).toBe(`${BASE}/acme-ssl-subscriptions?renewable=true`);
+
+    const one = await call('eurodns_subscription_get', { product: 'acme_ssl', id: 8 });
+    expect(one.requests[0]?.url).toBe(`${BASE}/acme-ssl-subscriptions/8`);
+
+    const classic = await call('eurodns_subscription_get', { product: 'ssl', renewable: true });
+    expect(classic.requests[0]?.url).toBe(`${BASE}/ssl-subscriptions?renewable=true`);
+  });
+
   it('serves a product without a listing through the cross-product search', async () => {
     const { requests } = await call('eurodns_subscription_get', {
       product: 'https_redirect',
@@ -371,6 +390,25 @@ describe('a switch composite', () => {
 
     const off = await call('eurodns_email_set_catchall', { id: 1, enabled: false });
     expect(off.requests[0]?.method).toBe('DELETE');
+  });
+
+  it('suspends or reinstates an ACME account on the flag', async () => {
+    const on = await call('eurodns_acme_ssl_set_account_suspended', {
+      subscriptionId: 3,
+      accountId: 'acct-1',
+      suspended: true,
+    });
+    expect(on.requests[0]?.method).toBe('POST');
+    expect(on.requests[0]?.url).toBe(`${BASE}/acme-ssl-subscriptions/3/accounts/acct-1/suspend`);
+    // The flag chooses the member and stops here; nothing named `suspended` goes upstream.
+    expect(on.requests[0]?.url).not.toContain('suspended');
+
+    const off = await call('eurodns_acme_ssl_set_account_suspended', {
+      subscriptionId: 3,
+      accountId: 'acct-1',
+      suspended: false,
+    });
+    expect(off.requests[0]?.url).toBe(`${BASE}/acme-ssl-subscriptions/3/accounts/acct-1/reinstate`);
   });
 
   it('refuses a call without the choosing argument before anything is sent', async () => {

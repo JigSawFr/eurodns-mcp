@@ -1,15 +1,16 @@
 # Tools
 
-The 79 operations of the OpenAPI document are served by **51 generated tools** — 35 that are
-one operation each, and 16 that stand in for several (a listing and its lookup, a create and
-its replace, an on and its off, the same read across five products) — plus four hand-written
-tools: three DNS workflow tools and `eurodns_portfolio_refresh`. That is 55 tools with every
-risk class enabled, and **36** on a default deployment, which hides billing and irreversible
+The 94 operations of the OpenAPI document are served by **63 generated tools** — 46 that are
+one operation each, and 17 that stand in for several (a listing and its lookup, a create and
+its replace, an on and its off, the same read across six products) — plus four hand-written
+tools: three DNS workflow tools and `eurodns_portfolio_refresh`. That is 67 tools with every
+risk class enabled, and **43** on a default deployment, which hides billing and irreversible
 operations. The history query and the compatibility pair are opt-in extras on top.
 
 | Area              | Default | All | Covers                                                                    |
 | ----------------- | ------: | --: | ------------------------------------------------------------------------- |
 | `dns`             |      12 |  12 | Zones, records, zone profiles, snapshots, DNSSEC status                   |
+| `acme_ssl`        |       7 |  12 | ACME accounts, names and organisation profiles; ordering, renewal, slots  |
 | `ssl`             |       5 |  11 | Certificates, validation, reissue; ordering, renewal, revocation          |
 | `premium_dns`     |       0 |   6 | Premium DNS ordering, renewal, upgrade, downgrade, reactivation, deletion |
 | `contact`         |       4 |   5 | Reusable contact profiles, default states, validation emails              |
@@ -25,9 +26,11 @@ operations. The history query and the compatibility pair are opt-in extras on to
 | `portfolio`       |       1 |   1 | Refreshing the cached domain list behind completion                       |
 | `tld`             |       1 |   1 | TLD terms and requirements                                                |
 
-The reads of the five subscription products — SSL, email, Premium DNS, Microsoft and HTTPS
-redirect — live under `subscription`, as one tool with a `product` argument; the `microsoft`
-area has nothing else, so it no longer appears.
+The reads of the six subscription products — SSL, ACME SSL, email, Premium DNS, Microsoft and
+HTTPS redirect — live under `subscription`, as one tool with a `product` argument; the
+`microsoft` area has nothing else, so it no longer appears. The `acme_ssl` area is the one the
+vendor added in September 2026: certificates issued through ACME against the subscription's
+accounts rather than ordered on a CSR, so it shares nothing with `ssl` but the word.
 
 Every tool name is prefixed with `eurodns_` so it cannot collide with another server's, and
 carries `readOnlyHint`, `destructiveHint` and `idempotentHint` annotations derived from what
@@ -62,7 +65,8 @@ arguments carry that choice, under four conventions:
   replace must send every field, changed or not: the API clears anything left out, which is
   why the description tells you to read the object first.
 - **`…_set_<thing>`** flips one setting: `enabled` true or false for DNSSEC and the catch-all,
-  `action` `add` or `remove` for a mailbox alias.
+  `action` `add` or `remove` for a mailbox alias, `suspended` true or false for an ACME
+  account.
 - **An enum chooses the member** where the operations differ in one word: `scope` `registry`
   or `zone` on `eurodns_domain_set_dnssec`; `product` on `eurodns_subscription_get`, which
   searches every product when it is omitted, lists one product when it is given alone, and
@@ -255,8 +259,8 @@ purposes overlap, and on this surface they do not. No model is called in CI: the
 dimension scores stay the registry's to give. To see them locally, point the CLI at an
 OpenAI-compatible endpoint and run `tdqs score --file tdqs/default.json` after `npm run tdqs`.
 
-The tool count sits at 36 by default, which the rubric anchors as "too many" until 25 and
-"borderline" until 15. The count is the honest size of an API with seventy-nine operations,
+The tool count sits at 43 by default, which the rubric anchors as "too many" until 25 and
+"borderline" until 15. The count is the honest size of an API with ninety-four operations,
 and folding further would trade purpose clarity, which the rubric weights most, for a number.
 
 ---

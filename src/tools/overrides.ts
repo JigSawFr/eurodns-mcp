@@ -237,6 +237,96 @@ export const DESCRIPTION_OVERRIDES: Record<string, string> = {
     'not yet issued use eurodns_ssl_cancel_certificate instead, and to rotate a key without ' +
     'revoking use eurodns_ssl_reissue_certificate.',
 
+  // --- ACME SSL ---------------------------------------------------------------------
+  createAcmeSslSubscription:
+    'Orders a new ACME SSL subscription from body — subscriptionProduct DOMAIN or ' +
+    'ORGANISATION, the domainNames and wildcards to cover, duration in years — and returns ' +
+    'the subscription created. It debits prepaid credit at once, so read ' +
+    'eurodns_account_get_prepaid_balance first; the www of each name is covered free. ' +
+    'Certificates are then issued by an ACME client against the accounts ' +
+    'eurodns_acme_ssl_get_accounts returns, not against a CSR: for a certificate ordered on ' +
+    'your own request use eurodns_ssl_create_subscription instead.',
+  renewAcmeSslSubscription:
+    'Orders the renewal of the ACME SSL subscription subscriptionId for the further term in ' +
+    'body.duration, in years, and returns the updated subscription. It debits prepaid ' +
+    'credit immediately and keeps the names, wildcards and accounts as they are. Use it for ' +
+    'a one-off extension; to have the subscription renew itself, set ' +
+    'eurodns_subscription_update_autorenew_settings instead. The id comes from ' +
+    'eurodns_subscription_get for product acme_ssl.',
+  upgradeAcmeSslSubscriptionQuantity:
+    'Adds domain or wildcard slots to the ACME SSL subscription subscriptionId — ' +
+    'body.additionalDomainNameQuantity and body.additionalWildcardQuantity, at least one ' +
+    'positive, each total capped at 200 — and returns the updated subscription. It creates ' +
+    'an order and debits prepaid credit; read eurodns_account_get_prepaid_balance first. It ' +
+    'only buys capacity: the names that fill it are set with ' +
+    'eurodns_acme_ssl_update_subscription_domains, and a slot freed by removing a name is ' +
+    'not given back, so check remainingDomainQuantity in eurodns_subscription_get before ' +
+    'paying for more.',
+  deleteAcmeSslSubscription:
+    'Schedules the ACME SSL subscription subscriptionId for deletion and returns nothing on ' +
+    'success; its certificates stop renewing and its accounts stop issuing once the process ' +
+    'completes. While it runs, eurodns_acme_ssl_cancel_subscription_deletion reverses it; ' +
+    'after that there is no way back. Confirm the id with eurodns_subscription_get for ' +
+    'product acme_ssl first. To keep the service until term but stop renewals, use ' +
+    'eurodns_subscription_update_autorenew_settings instead.',
+  cancelAcmeSslSubscriptionDeletion:
+    'Stops a deletion in progress on the ACME SSL subscription subscriptionId and returns ' +
+    'the subscription with its restored status. It only applies while ' +
+    'eurodns_subscription_get for product acme_ssl shows the subscription as pending ' +
+    'deletion; one that was never scheduled for deletion, or whose deletion has completed, ' +
+    'is refused rather than changed. It does not extend the term or change what the ' +
+    'subscription covers.',
+  updateAcmeSslSubscriptionDomains:
+    'Replaces the names the ACME SSL subscription subscriptionId covers with ' +
+    'body.domainNames and body.wildcards, complete lists rather than a change, and returns ' +
+    'the updated subscription. A name left out is removed, and only a CONFIGURED name can ' +
+    'be; a removed name does not free its slot and costs a new one if added again, so start ' +
+    'from what eurodns_subscription_get returns for product acme_ssl. Names beyond ' +
+    'remainingDomainQuantity and remainingWildcardQuantity are refused; buying slots is a ' +
+    'separate, paid upgrade. For an ORGANISATION product, body.organisationProfileId ' +
+    'attaches a profile from eurodns_acme_ssl_get_organisation_profiles.',
+  getAcmeSslAccounts:
+    'Returns the ACME accounts of the ACME SSL subscription subscriptionId: each account id ' +
+    'and status, the ACME directory serverUrl, and the external account binding — eabKid ' +
+    'and eabHmacKey — an ACME client needs to request certificates under the subscription. ' +
+    'Read it to configure a client, or to find the accountId that ' +
+    'eurodns_acme_ssl_set_account_suspended takes. The eabHmacKey is a secret: hand it to ' +
+    'the client, do not paste it into a conversation or a log. It lists accounts only; the ' +
+    'names they may issue for are in eurodns_subscription_get for product acme_ssl.',
+  deactivateAcmeSslAccount:
+    'Deactivates the ACME account accountId of the ACME SSL subscription subscriptionId ' +
+    'permanently and returns nothing on success. The account can never request a ' +
+    'certificate again and cannot be restored, so an ACME client still configured with it ' +
+    'fails at its next renewal: point the client at another account from ' +
+    'eurodns_acme_ssl_get_accounts first. To block an account temporarily use ' +
+    'eurodns_acme_ssl_set_account_suspended instead, which can be undone.',
+  getAcmeSslSubscriptionOrganisationProfiles:
+    'Returns the organisation profiles of the ACME SSL subscription subscriptionId: the ' +
+    'legal name, address and applicant contact the certificate authority validates for an ' +
+    'ORGANISATION product, each with its id and validation status. Read it to see whether a ' +
+    'profile is VALIDATED, PENDING_VALIDATION or REJECTED, and to find the ' +
+    'organisationProfileId that eurodns_acme_ssl_update_organisation_profile and ' +
+    'eurodns_acme_ssl_update_subscription_domains take. A DOMAIN product has none and ' +
+    'answers an empty list. It lists profiles only; the domain names are in ' +
+    'eurodns_subscription_get for product acme_ssl.',
+  updateAcmeSslSubscriptionOrganisationProfile:
+    'Replaces the organisation profile organisationProfileId of the ACME SSL subscription ' +
+    'subscriptionId with body — organisationName, address, country and the applicant ' +
+    'contact — and returns the saved profile. Send the complete profile as ' +
+    'eurodns_acme_ssl_get_organisation_profiles returned it, with your changes applied, ' +
+    'rather than the changed fields alone: it is a replacement. The certificate authority ' +
+    'validates what it receives, and the status is read back from the same listing; a ' +
+    'validation still running can be stopped with ' +
+    'eurodns_acme_ssl_cancel_organisation_profile_validation.',
+  cancelAcmeSslSubscriptionOrganisationProfileValidation:
+    'Stops the validation the certificate authority is running on the organisation profile ' +
+    'organisationProfileId of the ACME SSL subscription subscriptionId, and returns nothing ' +
+    'on success. It only applies to a profile eurodns_acme_ssl_get_organisation_profiles ' +
+    'shows as PENDING_VALIDATION; one already VALIDATED or REJECTED is refused rather than ' +
+    'changed. Use it when the details submitted were wrong: correct them with ' +
+    'eurodns_acme_ssl_update_organisation_profile rather than leaving a validation of the ' +
+    'wrong data to run.',
+
   // --- HTTPS redirect ---------------------------------------------------------------
   createHttpsRedirectSubscription:
     'Orders an HTTPS redirect subscription for body.domainName, with ' +
@@ -279,6 +369,12 @@ export const TITLE_OVERRIDES: Record<string, string> = {
   createHttpsRedirectSubscription: 'Create an HTTPS redirect subscription',
   deleteHttpsRedirectSubscription: 'Delete an HTTPS redirect subscription',
   renewHttpsRedirectSubscription: 'Renew an HTTPS redirect subscription',
+  upgradeAcmeSslSubscriptionQuantity: 'Add domain or wildcard slots to an ACME SSL subscription',
+  getAcmeSslAccounts: 'Get the ACME accounts of a subscription',
+  getAcmeSslSubscriptionOrganisationProfiles:
+    'Get the organisation profiles of an ACME SSL subscription',
+  updateAcmeSslSubscriptionOrganisationProfile:
+    'Update an organisation profile of an ACME SSL subscription',
 };
 
 /** The title a generated tool carries: curated where the summary reads badly, else the summary. */

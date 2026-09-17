@@ -771,6 +771,40 @@ export const COMPOSITES: readonly CompositeTool[] = [
       'mail; off, such mail is refused. For one named address use eurodns_email_set_alias ' +
       'instead. The subscription id comes from eurodns_subscription_get for product email.',
   }),
+  // --- ACME SSL -------------------------------------------------------------------------
+  switchBetween({
+    name: 'eurodns_acme_ssl_set_account_suspended',
+    title: 'Suspend or reinstate an ACME account',
+    on: 'suspendAcmeSslAccount',
+    off: 'reinstateAcmeSslAccount',
+    choice: {
+      key: 'suspended',
+      schema: z
+        .boolean()
+        .describe(
+          'true suspends the account so it can no longer request certificates; false ' +
+            'reinstates a suspended one.',
+        ),
+      isOn: (value: unknown) => value === true,
+    },
+    // Reversible by design — that is what separates it from the deactivation, which stays a
+    // tool of its own in the destructive class — and idempotent: suspending twice is one
+    // suspension.
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
+    description:
+      'Suspends (suspended: true) or reinstates (suspended: false) the ACME account accountId ' +
+      'of the ACME SSL subscription subscriptionId, and returns nothing on success. ' +
+      'Suspended, the account is refused when it asks for a certificate, so a client still ' +
+      'using it fails at its next renewal; reinstated, it works again unchanged. Use it ' +
+      'rather than deactivating when you may need the account back, for example while a key ' +
+      'is rotated. It reads nothing: the accounts and their status come from ' +
+      'eurodns_acme_ssl_get_accounts.',
+  }),
   // --- Subscriptions, every product ----------------------------------------------------
   subscriptionReads({
     name: 'eurodns_subscription_get',
@@ -782,6 +816,12 @@ export const COMPOSITES: readonly CompositeTool[] = [
         list: 'getSslSubscriptions',
         idParam: 'subscription-id',
         type: 'SSL',
+      },
+      acme_ssl: {
+        get: 'getAcmeSslSubscription',
+        list: 'getAcmeSslSubscriptions',
+        idParam: 'subscription-id',
+        type: 'ACME_SSL',
       },
       email: {
         get: 'getEmailSubscription',
@@ -808,9 +848,9 @@ export const COMPOSITES: readonly CompositeTool[] = [
       },
     },
     productDescription:
-      'Which product to read: ssl, email, premium_dns, microsoft or https_redirect. Omit it ' +
-      'to search every product at once with the common filters; required whenever id is ' +
-      'given, because ids are only unique within a product.',
+      'Which product to read: ssl, acme_ssl, email, premium_dns, microsoft or ' +
+      'https_redirect. Omit it to search every product at once with the common filters; ' +
+      'required whenever id is given, because ids are only unique within a product.',
     idDescription:
       'Numeric id of one subscription of the chosen product, from a previous search, to ' +
       'return in full. Omit it to list or search instead.',
@@ -823,26 +863,26 @@ export const COMPOSITES: readonly CompositeTool[] = [
         'product is given, which already selects one.',
       domainName:
         'Keep only subscriptions attached to this domain, e.g. example.com. Read by the ' +
-        'cross-product search and by the email and premium_dns listings; use microsoftDomain ' +
-        'for Microsoft.',
+        'cross-product search and by the email, premium_dns and acme_ssl listings; use ' +
+        'microsoftDomain for Microsoft.',
       autoRenewEnabled:
         'Cross-product search only: true keeps subscriptions that renew themselves, false ' +
         'only those that will lapse.',
       commonName: 'ssl only: the common name of a certificate in the subscription.',
       sanName: 'ssl only: a Subject Alternative Name of a certificate in the subscription.',
-      renewable: 'ssl only: true keeps subscriptions that can still be renewed.',
+      renewable: 'ssl and acme_ssl only: true keeps subscriptions that can still be renewed.',
       userName: 'email only: the mailbox user name, the part before the @.',
       microsoftDomain: 'microsoft only: the Microsoft 365 domain of the subscription.',
       accountLabel: 'microsoft only: the account label the subscription was created under.',
     },
     description:
       'Returns one subscription in full when product and id are given — an SSL subscription ' +
-      'with its certificates, a mailbox with its aliases, a Premium DNS, Microsoft or HTTPS ' +
-      'redirect term — lists one product’s subscriptions when only product is given, or ' +
-      'searches every product when both are omitted. Start with the cross-product search for ' +
-      'an expiry review, then narrow by product. It reads records only and manages nothing ' +
-      'behind them; a filter marked for another product is ignored, and an id without product ' +
-      'is refused before any call, since ids repeat across products. Its ids feed ' +
+      'with its certificates, an ACME SSL one with its names, a mailbox with its aliases, a ' +
+      'Premium DNS, Microsoft or HTTPS redirect term — lists one product when only product ' +
+      'is given, or searches every product when both are omitted. Start with the ' +
+      'cross-product search for an expiry review, then narrow by product. It reads only; a ' +
+      'filter marked for another product is ignored, and an id without product is refused ' +
+      'before any call, since ids repeat across products. Its ids feed ' +
       'eurodns_ssl_get_certificate and eurodns_email_set_alias.',
   }),
 ];

@@ -13,13 +13,22 @@ import {
 describe('generated operations', () => {
   it('covers every operation in the document', () => {
     expect(OPERATIONS).toHaveLength(OPERATION_COUNT);
-    expect(OPERATION_COUNT).toBe(79);
-    expect(new Set(OPERATIONS.map((o) => o.tag)).size).toBe(17);
+    expect(OPERATION_COUNT).toBe(94);
+    expect(new Set(OPERATIONS.map((o) => o.tag)).size).toBe(18);
   });
 
   it('gives every operation a unique id', () => {
     const ids = OPERATIONS.map((o) => o.operationId);
     expect(new Set(ids).size).toBe(ids.length);
+    // The document itself does not: it names both listings `getSslSubscriptions`, and the
+    // generator renames the ACME one. Pinned here because the composites resolve members by
+    // id, and a duplicate would hand the SSL product the ACME listing without a word.
+    expect(OPERATIONS.find((o) => o.path === '/acme-ssl-subscriptions')?.operationId).toBe(
+      'getAcmeSslSubscriptions',
+    );
+    expect(OPERATIONS.find((o) => o.path === '/ssl-subscriptions')?.operationId).toBe(
+      'getSslSubscriptions',
+    );
   });
 
   it('classifies risk by intent, not by HTTP method', () => {
@@ -42,15 +51,15 @@ describe('generated operations', () => {
       acc[o.risk] = (acc[o.risk] ?? 0) + 1;
       return acc;
     }, {});
-    expect(tally.billing).toBe(11);
-    expect(tally.destructive).toBe(8);
-    // 32 GETs plus the four side-effect-free POSTs.
-    expect(tally.read).toBe(36);
+    expect(tally.billing).toBe(14);
+    expect(tally.destructive).toBe(10);
+    // 36 GETs plus the four side-effect-free POSTs.
+    expect(tally.read).toBe(40);
   });
 
   it('separates pagination headers from ordinary header parameters', () => {
     const paginated = OPERATIONS.filter((o) => o.paginated);
-    expect(paginated.length).toBe(13);
+    expect(paginated.length).toBe(14);
     for (const operation of OPERATIONS) {
       for (const header of operation.headerParams) {
         expect(header.name.toLowerCase().startsWith('pagination-')).toBe(false);

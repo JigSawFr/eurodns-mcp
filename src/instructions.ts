@@ -19,7 +19,7 @@ export function hiddenClasses(config: Config): string[] {
   return hidden;
 }
 
-/** The 16 areas the tool names are grouped into, derived rather than repeated. */
+/** The 17 areas the tool names are grouped into, derived rather than repeated. */
 function areas(): string {
   return [...new Set(Object.values(TAG_PREFIXES))].sort().join(', ');
 }

@@ -47,6 +47,10 @@ describe('tool surface', () => {
 
     expect(byName.get('eurodns_dns_get_zone')?.annotations?.readOnlyHint).toBe(true);
     expect(byName.get('eurodns_ssl_revoke_certificate')?.annotations?.destructiveHint).toBe(true);
+    // Not a DELETE, so the annotation has to come from the risk class, not the method.
+    expect(byName.get('eurodns_acme_ssl_deactivate_account')?.annotations?.destructiveHint).toBe(
+      true,
+    );
     expect(byName.get('eurodns_dns_diff_zone')?.annotations?.readOnlyHint).toBe(true);
 
     await close();

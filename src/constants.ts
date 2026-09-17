@@ -114,6 +114,9 @@ export const BILLING_OPERATION_IDS = new Set([
   'createHttpsRedirectSubscription',
   'renewHttpsRedirectSubscription',
   'updateSubscriptionAutorenewSettings',
+  'createAcmeSslSubscription',
+  'renewAcmeSslSubscription',
+  'upgradeAcmeSslSubscriptionQuantity',
 ]);
 
 /**
@@ -130,6 +133,11 @@ export const DESTRUCTIVE_OPERATION_IDS = new Set([
   'revokeSslCertificate',
   'cancelSslCertificate',
   'cancelSslSan',
+  // Deleting an ACME SSL subscription can be cancelled while the process runs, like the
+  // HTTPS redirect one; it is here for the same reason. Deactivating an ACME account cannot:
+  // the document says so in bold, and RFC 8555 §7.3.6 gives it no way back.
+  'deleteAcmeSslSubscription',
+  'deactivateAcmeSslAccount',
 ]);
 
 /** OAuth scopes for the risk classes. */
