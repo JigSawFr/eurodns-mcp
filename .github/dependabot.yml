@@ -11,6 +11,15 @@ updates:
       interval: weekly
     commit-message:
       prefix: 'chore(deps)'
+    groups:
+      # `init` and `analyze` are two steps of one action and must run the same release:
+      # `analyze` reads the configuration `init` wrote and refuses one from another version
+      # ("Loaded a configuration file for version X, but running version Y"). Dependabot
+      # sees two dependencies and, ungrouped, opens two pull requests that each fail CodeQL
+      # on their own — and would leave main red if merged one at a time.
+      codeql:
+        patterns:
+          - 'github/codeql-action*'
 
   # The Dockerfile pins its base image by digest, for the same reason the actions above are
   # pinned by commit. A digest never updates on its own either — including for the security
