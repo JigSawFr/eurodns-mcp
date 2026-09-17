@@ -48,8 +48,8 @@ export const PARAMETER_DESCRIPTIONS_BY_OPERATION: Record<string, string> = {
   'getInvoices.invoice-statuses':
     'Keep only invoices in these statuses, e.g. TO_PAY, PAID or CANCELLED.',
   'getSubscriptions.subscription-types':
-    'Keep only these products: SSL, EMAIL, PREMIUM_DNS, MICROSOFT, HTTPS_REDIRECT, HOSTING ' +
-    'or WHOIS_PRIVACY. Omit for every product.',
+    'Keep only these products: SSL, ACME_SSL, EMAIL, PREMIUM_DNS, MICROSOFT, HTTPS_REDIRECT, ' +
+    'HOSTING or WHOIS_PRIVACY. Omit for every product.',
   'getSubscriptions.auto-renew-enabled':
     'true keeps only subscriptions that renew themselves, false only those that will lapse.',
 };
@@ -80,6 +80,15 @@ export const PARAMETER_DESCRIPTIONS_BY_AREA: Record<string, string> = {
   'https_redirect.subscription-id':
     'Numeric id of the HTTPS redirect subscription, from eurodns_subscription_get with ' +
     'product https_redirect and no id.',
+  'acme_ssl.subscription-id':
+    'Numeric id of the ACME SSL subscription, from eurodns_subscription_get with product ' +
+    'acme_ssl and no id.',
+  'acme_ssl.account-id':
+    'Identifier of the ACME account, a string, from the accounts ' +
+    'eurodns_acme_ssl_get_accounts returns for the subscription.',
+  'acme_ssl.organisation-profile-id':
+    'Numeric id of the organisation profile, from the profiles ' +
+    'eurodns_acme_ssl_get_organisation_profiles returns for the subscription.',
   'subscription.subscription-id':
     'Numeric id of the subscription, whatever its product, as returned by ' +
     'eurodns_subscription_get called without product or id.',
@@ -173,6 +182,25 @@ export const BODY_DESCRIPTIONS: Record<string, string> = {
   updateSslValidationApprover:
     'verificationMethod, and for email validation the approver address, chosen from the ' +
     'allowed approvers eurodns_ssl_get_validation lists.',
+
+  // --- ACME SSL ----------------------------------------------------------------------
+  createAcmeSslSubscription:
+    'The order: subscriptionProduct DOMAIN or ORGANISATION, the domainNames and wildcards ' +
+    'to cover, duration in years with durationUnit YEAR, an organisationProfile for an ' +
+    'ORGANISATION product, and skipUseAvailableToken to buy a new token rather than ' +
+    'activate a spare one.',
+  renewAcmeSslSubscription: 'The renewal term: duration in years, 1 to 3, with durationUnit YEAR.',
+  upgradeAcmeSslSubscriptionQuantity:
+    'additionalDomainNameQuantity and additionalWildcardQuantity: how many slots to add. At ' +
+    'least one must be positive, and neither total may exceed 200.',
+  updateAcmeSslSubscriptionDomains:
+    'The complete lists after the change, not the difference: domainNames and wildcards the ' +
+    'subscription should cover, plus organisationProfileId for an ORGANISATION product. A ' +
+    'name absent from the lists is removed.',
+  updateAcmeSslSubscriptionOrganisationProfile:
+    'The whole profile as eurodns_acme_ssl_get_organisation_profiles returned it, with the ' +
+    'changes applied: organisationName, address lines, city, postalCode, country and the ' +
+    'applicant name, email and phone.',
 
   // --- Email ---------------------------------------------------------------------------
   updateEmailPassword:

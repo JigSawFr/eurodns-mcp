@@ -67,6 +67,10 @@
             "x-displayName": "SSL subscriptions"
         },
         {
+            "name": "AcmeSslSubscriptionService",
+            "x-displayName": "ACME SSL subscriptions"
+        },
+        {
             "name": "EmailSubscriptionService",
             "x-displayName": "Email subscriptions"
         },
@@ -4259,6 +4263,814 @@
                 }
             }
         },
+        "/acme-ssl-subscriptions/create": {
+            "post": {
+                "tags": [
+                    "AcmeSslSubscriptionService"
+                ],
+                "summary": "Create an ACME SSL subscription",
+                "description": "Order the provisioning of an ACME SSL subscription.<br/>Select the number of domains you want to secure and decide whether you need a wildcard to protect subdomains. You can adjust your subscription as your domain portfolio evolves.",
+                "operationId": "createAcmeSslSubscription",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateAcmeSslSubscription"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "default": {
+                        "description": "Request error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SubscriptionErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Success",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AcmeSslSubscription"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/acme-ssl-subscriptions": {
+            "get": {
+                "tags": [
+                    "AcmeSslSubscriptionService"
+                ],
+                "summary": "Search ACME SSL subscriptions",
+                "description": "Get ACME SSL subscriptions matching search parameters.",
+                "operationId": "getSslSubscriptions",
+                "parameters": [
+                    {
+                        "name": "pagination-page",
+                        "in": "header",
+                        "required": false,
+                        "style": "simple",
+                        "explode": false,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int32"
+                        }
+                    },
+                    {
+                        "name": "pagination-size",
+                        "in": "header",
+                        "required": false,
+                        "style": "simple",
+                        "explode": false,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int32"
+                        }
+                    },
+                    {
+                        "name": "pagination-sortfield",
+                        "in": "header",
+                        "required": false,
+                        "style": "simple",
+                        "explode": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "pagination-sortorder",
+                        "in": "header",
+                        "required": false,
+                        "style": "simple",
+                        "explode": false,
+                        "schema": {
+                            "$ref": "#/components/schemas/SortOrder"
+                        }
+                    },
+                    {
+                        "name": "subscription-status",
+                        "in": "query",
+                        "required": false,
+                        "style": "form",
+                        "explode": true,
+                        "schema": {
+                            "$ref": "#/components/schemas/SubscriptionStatus"
+                        }
+                    },
+                    {
+                        "name": "domain-name",
+                        "in": "query",
+                        "required": false,
+                        "style": "form",
+                        "explode": true,
+                        "schema": {
+                            "type": "string",
+                            "description": "The domain name of an ACME SSL domain of the subscription.\nSearches both domains and wildcards"
+                        }
+                    },
+                    {
+                        "name": "renewable",
+                        "in": "query",
+                        "required": false,
+                        "style": "form",
+                        "explode": true,
+                        "schema": {
+                            "type": "boolean",
+                            "description": "The renewal capacity of the ACME SSL subscription."
+                        }
+                    }
+                ],
+                "responses": {
+                    "default": {
+                        "description": "Request error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SubscriptionErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Success",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/AcmeSslSubscription"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/acme-ssl-subscriptions/{subscription-id}": {
+            "get": {
+                "tags": [
+                    "AcmeSslSubscriptionService"
+                ],
+                "summary": "Get an ACME SSL subscription",
+                "description": "Get the detailed data of an ACME SSL subscription.<br/>",
+                "operationId": "getAcmeSslSubscription",
+                "parameters": [
+                    {
+                        "name": "subscription-id",
+                        "in": "path",
+                        "required": true,
+                        "style": "simple",
+                        "explode": false,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int32"
+                        }
+                    }
+                ],
+                "responses": {
+                    "default": {
+                        "description": "Request error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SubscriptionErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Success",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AcmeSslSubscription"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "AcmeSslSubscriptionService"
+                ],
+                "summary": "Delete an ACME SSL subscription",
+                "description": "Request deletion of an ACME SSL subscription.<br/>The deletion process can be canceled with the `Cancel the deletion of an ACME SSL subscription` flow.",
+                "operationId": "deleteAcmeSslSubscription",
+                "parameters": [
+                    {
+                        "name": "subscription-id",
+                        "in": "path",
+                        "required": true,
+                        "style": "simple",
+                        "explode": false,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int32"
+                        }
+                    }
+                ],
+                "responses": {
+                    "default": {
+                        "description": "Request error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SubscriptionErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Success"
+                    }
+                }
+            }
+        },
+        "/acme-ssl-subscriptions/{subscription-id}/cancel-deletion": {
+            "post": {
+                "tags": [
+                    "AcmeSslSubscriptionService"
+                ],
+                "summary": "Cancel the deletion of an ACME SSL subscription",
+                "description": "Request cancellation of the ACME SSL subscription deletion process.",
+                "operationId": "cancelAcmeSslSubscriptionDeletion",
+                "parameters": [
+                    {
+                        "name": "subscription-id",
+                        "in": "path",
+                        "required": true,
+                        "style": "simple",
+                        "explode": false,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int32"
+                        }
+                    }
+                ],
+                "responses": {
+                    "default": {
+                        "description": "Request error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SubscriptionErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Success",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AcmeSslSubscription"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/acme-ssl-subscriptions/{subscription-id}/renew": {
+            "post": {
+                "tags": [
+                    "AcmeSslSubscriptionService"
+                ],
+                "summary": "Renew an ACME SSL subscription",
+                "description": "Order the renewal of an ACME SSL subscription.",
+                "operationId": "renewAcmeSslSubscription",
+                "parameters": [
+                    {
+                        "name": "subscription-id",
+                        "in": "path",
+                        "required": true,
+                        "style": "simple",
+                        "explode": false,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int32"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RenewAcmeSslSubscription"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "default": {
+                        "description": "Request error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SubscriptionErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Success",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AcmeSslSubscription"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/acme-ssl-subscriptions/{subscription-id}/upgrade-quantity": {
+            "post": {
+                "tags": [
+                    "AcmeSslSubscriptionService"
+                ],
+                "summary": "Upgrade the quantity of an ACME SSL subscription",
+                "description": "Order the quantity upgrade of an existing ACME SSL subscription. <br/>At least one of the domain or wildcard quantity field must be provided and be positive. <br/>The subscription domain quantity and wildcard quantity cannot each exceed 200.",
+                "operationId": "upgradeAcmeSslSubscriptionQuantity",
+                "parameters": [
+                    {
+                        "name": "subscription-id",
+                        "in": "path",
+                        "required": true,
+                        "style": "simple",
+                        "explode": false,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int32"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UpgradeAcmeSslSubscriptionQuantity"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "default": {
+                        "description": "Request error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SubscriptionErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Success",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AcmeSslSubscription"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/acme-ssl-subscriptions/{subscription-id}/domains": {
+            "put": {
+                "tags": [
+                    "AcmeSslSubscriptionService"
+                ],
+                "summary": "Update the domain names of an ACME SSL subscription",
+                "description": "Provide the full list of domain names and wildcards of your ACME SSL certificate.<br/>The units of removed domain names or wildcards will not be added back to your overall quota.<br/>Only `CONFIGURED` domain names or wildcards can be removed.<br/>Adding a domain again will use a new unit from your remaining quota.",
+                "operationId": "updateAcmeSslSubscriptionDomains",
+                "parameters": [
+                    {
+                        "name": "subscription-id",
+                        "in": "path",
+                        "required": true,
+                        "style": "simple",
+                        "explode": false,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int32"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UpdateAcmeSslDomains"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "default": {
+                        "description": "Request error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Success",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AcmeSslSubscription"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/acme-ssl-subscriptions/{subscription-id}/accounts": {
+            "get": {
+                "tags": [
+                    "AcmeSslSubscriptionService"
+                ],
+                "summary": "Get the ACME SSL subscription accounts",
+                "description": "List the accounts and their external account binding (EAB) details.",
+                "operationId": "getAcmeSslAccounts",
+                "parameters": [
+                    {
+                        "name": "subscription-id",
+                        "in": "path",
+                        "required": true,
+                        "style": "simple",
+                        "explode": false,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int32"
+                        }
+                    }
+                ],
+                "responses": {
+                    "default": {
+                        "description": "Request error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Success",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/AcmeSslAccount"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/acme-ssl-subscriptions/{subscription-id}/accounts/{account-id}/suspend": {
+            "post": {
+                "tags": [
+                    "AcmeSslSubscriptionService"
+                ],
+                "summary": "Suspend an ACME account",
+                "description": "Suspend one of the accounts linked to an ACME SSL subscription.<br/>A suspended account can be reinstated.<br/>This action is useful when you want to prevent ACME accounts from being used to request certificates without fully deactivating them.",
+                "operationId": "suspendAcmeSslAccount",
+                "parameters": [
+                    {
+                        "name": "account-id",
+                        "in": "path",
+                        "required": true,
+                        "style": "simple",
+                        "explode": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "subscription-id",
+                        "in": "path",
+                        "required": true,
+                        "style": "simple",
+                        "explode": false,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int32"
+                        }
+                    }
+                ],
+                "responses": {
+                    "default": {
+                        "description": "Request error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Success",
+                        "content": {
+                            
+                        }
+                    }
+                }
+            }
+        },
+        "/acme-ssl-subscriptions/{subscription-id}/accounts/{account-id}/reinstate": {
+            "post": {
+                "tags": [
+                    "AcmeSslSubscriptionService"
+                ],
+                "summary": "Reinstate an ACME account",
+                "description": "Suspended accounts linked to an ACME SSL subscription can be reinstated.<br/>This action is useful when you want to allow previously suspended ACME accounts to request certificates again.",
+                "operationId": "reinstateAcmeSslAccount",
+                "parameters": [
+                    {
+                        "name": "account-id",
+                        "in": "path",
+                        "required": true,
+                        "style": "simple",
+                        "explode": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "subscription-id",
+                        "in": "path",
+                        "required": true,
+                        "style": "simple",
+                        "explode": false,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int32"
+                        }
+                    }
+                ],
+                "responses": {
+                    "default": {
+                        "description": "Request error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Success",
+                        "content": {
+                            
+                        }
+                    }
+                }
+            }
+        },
+        "/acme-ssl-subscriptions/{subscription-id}/accounts/{account-id}/deactivate": {
+            "post": {
+                "tags": [
+                    "AcmeSslSubscriptionService"
+                ],
+                "summary": "Deactivate an ACME account",
+                "description": "This action is useful when you want to prevent ACME accounts from ever being used to request certificates again.<br/><b>This operation is final, deactivated accounts cannot be restored.</b>",
+                "operationId": "deactivateAcmeSslAccount",
+                "parameters": [
+                    {
+                        "name": "account-id",
+                        "in": "path",
+                        "required": true,
+                        "style": "simple",
+                        "explode": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "subscription-id",
+                        "in": "path",
+                        "required": true,
+                        "style": "simple",
+                        "explode": false,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int32"
+                        }
+                    }
+                ],
+                "responses": {
+                    "default": {
+                        "description": "Request error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Success",
+                        "content": {
+                            
+                        }
+                    }
+                }
+            }
+        },
+        "/acme-ssl-subscriptions/{subscription-id}/organisation-profiles": {
+            "get": {
+                "tags": [
+                    "AcmeSslSubscriptionService"
+                ],
+                "summary": "Get the ACME SSL subscription organisation profiles",
+                "description": "Get the detailed data of the organisation profiles of a subscription.",
+                "operationId": "getAcmeSslSubscriptionOrganisationProfiles",
+                "parameters": [
+                    {
+                        "name": "subscription-id",
+                        "in": "path",
+                        "required": true,
+                        "style": "simple",
+                        "explode": false,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int32"
+                        }
+                    }
+                ],
+                "responses": {
+                    "default": {
+                        "description": "Request error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Success",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/AcmeSslOrganisationProfile"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/acme-ssl-subscriptions/{subscription-id}/organisation-profiles/{organisation-profile-id}": {
+            "put": {
+                "tags": [
+                    "AcmeSslSubscriptionService"
+                ],
+                "summary": "Update an ACME SSL organisation profile",
+                "description": "Update the details of the organisation profile of a subscription.",
+                "operationId": "updateAcmeSslSubscriptionOrganisationProfile",
+                "parameters": [
+                    {
+                        "name": "organisation-profile-id",
+                        "in": "path",
+                        "required": true,
+                        "style": "simple",
+                        "explode": false,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int32"
+                        }
+                    },
+                    {
+                        "name": "subscription-id",
+                        "in": "path",
+                        "required": true,
+                        "style": "simple",
+                        "explode": false,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int32"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AcmeSslOrganisationProfile"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "default": {
+                        "description": "Request error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Success",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AcmeSslOrganisationProfile"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/acme-ssl-subscriptions/{subscription-id}/organisation-profiles/{organisation-profile-id}/cancel-validation": {
+            "post": {
+                "tags": [
+                    "AcmeSslSubscriptionService"
+                ],
+                "summary": "Cancel the validation of an organisation profile",
+                "description": "Request the cancellation of an ongoing organisation profile validation process",
+                "operationId": "cancelAcmeSslSubscriptionOrganisationProfileValidation",
+                "parameters": [
+                    {
+                        "name": "organisation-profile-id",
+                        "in": "path",
+                        "required": true,
+                        "style": "simple",
+                        "explode": false,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int32"
+                        }
+                    },
+                    {
+                        "name": "subscription-id",
+                        "in": "path",
+                        "required": true,
+                        "style": "simple",
+                        "explode": false,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int32"
+                        }
+                    }
+                ],
+                "responses": {
+                    "default": {
+                        "description": "Request error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Success"
+                    }
+                }
+            }
+        },
         "/microsoft-subscriptions": {
             "get": {
                 "tags": [
@@ -4970,6 +5782,21 @@
     },
     "components": {
         "schemas": {
+            "AcmeAccountStatus": {
+                "type": "string",
+                "description": "The current status of the ACME account.",
+                "enum": [
+                    "ABANDONED",
+                    "DEACTIVATED",
+                    "EXPIRED",
+                    "INVALID",
+                    "PENDING",
+                    "PROCESSING",
+                    "REVOKED",
+                    "SUSPENDED",
+                    "VALID"
+                ]
+            },
             "Invoice": {
                 "type": "object",
                 "properties": {
@@ -5200,6 +6027,63 @@
                     }
                 }
             },
+            "AutoSslDomainStatus": {
+                "type": "string",
+                "description": "The status of the ACME SSL domain.",
+                "enum": [
+                    "CANCELLED",
+                    "CONFIGURATION_ERROR",
+                    "CONFIGURED",
+                    "DELETION_ERROR",
+                    "DELETED",
+                    "NOT_CONFIGURED",
+                    "PENDING_CONFIGURATION",
+                    "PENDING_UPDATE",
+                    "TERMINATED",
+                    "TO_CONFIGURE",
+                    "TO_DELETE"
+                ]
+            },
+            "AcmeSslAccount": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "description": "The unique identifier of the ACME account"
+                    },
+                    "status": {
+                        "$ref": "#/components/schemas/AcmeAccountStatus"
+                    },
+                    "ipAddress": {
+                        "type": "string",
+                        "description": "The IP address of the account"
+                    },
+                    "lastActivity": {
+                        "type": "string",
+                        "description": "The last activity date of the account"
+                    },
+                    "userAgent": {
+                        "type": "string",
+                        "description": "The user agent of the account"
+                    },
+                    "serverDescription": {
+                        "type": "string",
+                        "description": "The server description"
+                    },
+                    "serverUrl": {
+                        "type": "string",
+                        "description": "The ACME directory URL"
+                    },
+                    "eabKid": {
+                        "type": "string",
+                        "description": "Your unique public account key identifier (base64url-encoded). It tells the ACME server which specific customer or policy profile to associate with the registration."
+                    },
+                    "eabHmacKey": {
+                        "type": "string",
+                        "description": "Your secret authentication key (base64url-encoded). It proves you are authorized to use the service and bind the account"
+                    }
+                }
+            },
             "PremiumSubscriptionProduct": {
                 "type": "string",
                 "description": "The Premium DNS product to order",
@@ -5243,6 +6127,7 @@
                     "HOSTING",
                     "HTTPS_REDIRECT",
                     "SSL",
+                    "ACME_SSL",
                     "WHOIS_PRIVACY"
                 ]
             },
@@ -5502,6 +6387,91 @@
                     }
                 }
             },
+            "AcmeSslSubscription": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "description": "The unique id of the subscription",
+                        "format": "int32"
+                    },
+                    "subscriptionType": {
+                        "$ref": "#/components/schemas/SubscriptionType"
+                    },
+                    "deliveryDate": {
+                        "type": "string",
+                        "description": "The delivery date of the subscription",
+                        "format": "date-time"
+                    },
+                    "expirationDate": {
+                        "type": "string",
+                        "description": "The date the subscription will expire",
+                        "format": "date-time"
+                    },
+                    "updateDate": {
+                        "type": "string",
+                        "description": "The date of the last subscription update",
+                        "format": "date-time"
+                    },
+                    "subscriptionStatus": {
+                        "$ref": "#/components/schemas/SubscriptionStatus"
+                    },
+                    "active": {
+                        "type": "boolean",
+                        "description": "Tells if the service behind the subscription is effectively active or not."
+                    },
+                    "autoRenewSettings": {
+                        "$ref": "#/components/schemas/SubscriptionAutoRenewSettings"
+                    },
+                    "domainName": {
+                        "type": "string",
+                        "description": "The domain name the subscription is attached to"
+                    },
+                    "productDescription": {
+                        "type": "string",
+                        "description": "The description of the product the subscription is attached to"
+                    },
+                    "renewable": {
+                        "type": "boolean",
+                        "description": "Defines if the subscription can be renewed."
+                    },
+                    "upgradable": {
+                        "type": "boolean",
+                        "description": "Defines if the subscription can be upgraded."
+                    },
+                    "downgradable": {
+                        "type": "boolean",
+                        "description": "Defines if the subscription can be downgraded."
+                    },
+                    "acmeSslDomains": {
+                        "type": "array",
+                        "description": "The list of domains of the subscription.",
+                        "items": {
+                            "$ref": "#/components/schemas/AcmeSslDomain"
+                        }
+                    },
+                    "domainQuantity": {
+                        "type": "integer",
+                        "description": "The number of domains of the subscription.",
+                        "format": "int32"
+                    },
+                    "wildcardQuantity": {
+                        "type": "integer",
+                        "description": "The number of wildcard domains of the subscription.",
+                        "format": "int32"
+                    },
+                    "remainingDomainQuantity": {
+                        "type": "integer",
+                        "description": "The number of available domains of the subscription.",
+                        "format": "int32"
+                    },
+                    "remainingWildcardQuantity": {
+                        "type": "integer",
+                        "description": "The number of available wildcard domains of the subscription.",
+                        "format": "int32"
+                    }
+                }
+            },
             "SslVerificationStatus": {
                 "type": "string",
                 "enum": [
@@ -5509,6 +6479,72 @@
                     "PENDING",
                     "NOT_VERIFIED"
                 ]
+            },
+            "AcmeSslOrganisationProfile": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "description": "Unique identifier of this organisation profile.",
+                        "format": "int32"
+                    },
+                    "organisationName": {
+                        "type": "string",
+                        "description": "Legal, registered name of the organisation as it should appear on the certificate."
+                    },
+                    "organisationalUnitName": {
+                        "type": "string",
+                        "description": "Name of the department or unit within the organisation (e.g. \"IT Department\"). Optional and not included in modern browser UI, but may still be validated by the certificate authority."
+                    },
+                    "address1": {
+                        "type": "string",
+                        "description": "First line of the organisation's registered address (street address)."
+                    },
+                    "address2": {
+                        "type": "string",
+                        "description": "Second line of the organisation's address, if additional address information is required."
+                    },
+                    "address3": {
+                        "type": "string",
+                        "description": "Third line of the organisation's address, if additional address information is required."
+                    },
+                    "city": {
+                        "type": "string",
+                        "description": "City in which the organisation is located."
+                    },
+                    "state": {
+                        "type": "string",
+                        "description": "State, province, or region in which the organisation is located."
+                    },
+                    "postalCode": {
+                        "type": "string",
+                        "description": "Postal or ZIP code of the organisation's address."
+                    },
+                    "country": {
+                        "type": "string",
+                        "description": "Two-letter ISO 3166-1 alpha-2 country code in which the organisation is registered."
+                    },
+                    "applicantFirstName": {
+                        "type": "string",
+                        "description": "First name of the applicant who is authorised to request the certificate on behalf of the organisation."
+                    },
+                    "applicantLastName": {
+                        "type": "string",
+                        "description": "Last name of the applicant who is authorised to request the certificate on behalf of the organisation."
+                    },
+                    "applicantEmail": {
+                        "type": "string",
+                        "description": "Email address of the applicant, used by the certificate authority for validation correspondence."
+                    },
+                    "applicantPhone": {
+                        "type": "string",
+                        "description": "Phone number of the applicant, used by the certificate authority to verify the validation request."
+                    },
+                    "status": {
+                        "$ref": "#/components/schemas/OrganisationProfileStatus"
+                    }
+                },
+                "description": "The organisation that will be associated with this SSL.<br/><b>IMPORTANT:</b> New organisation profiles or updates to profiles require manual validation by the certificate authority, which takes <b>at least 48 hours</b>. Validation starts after activation, and the ORGANISATION certificate can only be issued once validation is complete.<br/><b>Only provide the organisation profile for `ORGANISATION` subscription product.</b>"
             },
             "ContactValidationMethod": {
                 "type": "string",
@@ -6198,7 +7234,8 @@
                     "ADMIN_CONTACT",
                     "TECHNICAL_CONTACT",
                     "BILLING_CONTACT",
-                    "NAMESERVERS"
+                    "NAMESERVERS",
+                    "COMMENT"
                 ]
             },
             "ErrorResponse": {
@@ -6507,6 +7544,53 @@
                     }
                 }
             },
+            "CreateAcmeSslSubscription": {
+                "required": [
+                    "subscriptionProduct"
+                ],
+                "type": "object",
+                "properties": {
+                    "subscriptionProduct": {
+                        "$ref": "#/components/schemas/AcmeSslSubscriptionProduct"
+                    },
+                    "domainNames": {
+                        "maxItems": 200,
+                        "type": "array",
+                        "description": "The list of domain names.<br/><b>Note:</b> The \"www\" sub-domain is included for free (e.g., domain.com also covers www.domain.com)",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "wildcards": {
+                        "maxItems": 200,
+                        "type": "array",
+                        "description": "The list of wildcard domain names.<br/><b>Note:</b> The base domain is included with each wildcard for free (e.g., *.domain.com also covers domain.com)",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "organisationProfile": {
+                        "$ref": "#/components/schemas/AcmeSslOrganisationProfile"
+                    },
+                    "skipUseAvailableToken": {
+                        "type": "boolean",
+                        "description": "When set to true, the API will always purchase a new token instead of activating an existing one.<br/>For ACME SSL tokens, only tokens matching the exact quantity of domain names and wildcards will be reused.",
+                        "default": false
+                    },
+                    "durationUnit": {
+                        "type": "string",
+                        "description": "The time unit the product will last for",
+                        "enum": [
+                            "YEAR"
+                        ]
+                    },
+                    "duration": {
+                        "type": "number",
+                        "description": "The ACME SSL subscription duration in years. Allowed values: 1.0, 2.0, 3.0."
+                    }
+                },
+                "description": "The input data to order an ACME SSL subscription.<br/>The number of ordered and billed domain names or wildcards is directly derived from their respective fields."
+            },
             "SslApproverContact": {
                 "required": [
                     "email",
@@ -6617,6 +7701,15 @@
                         "description": "The fully qualified domain name (FQDN), e.g., ns1.example.com"
                     }
                 }
+            },
+            "AcmeSslSubscriptionProduct": {
+                "type": "string",
+                "description": "The Acme SSL certificate product to order.\n- DOMAIN: Most basic SSL certificates for businesses that want control over the domain. They are quick to issue and are ideal for personal websites or blogs.\n- ORGANISATION: Provide an extra layer of trust by validating the organization's identity behind the domain. Best suited for websites where credibility is essential.",
+                "example": "DOMAIN",
+                "enum": [
+                    "DOMAIN",
+                    "ORGANISATION"
+                ]
             },
             "DomainSearchRequest": {
                 "type": "object",
@@ -6757,6 +7850,21 @@
                         "items": {
                             "$ref": "#/components/schemas/ContactValidationDetails"
                         }
+                    }
+                }
+            },
+            "AcmeSslDomain": {
+                "type": "object",
+                "properties": {
+                    "status": {
+                        "$ref": "#/components/schemas/AutoSslDomainStatus"
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "The domain name."
+                    },
+                    "organisationProfile": {
+                        "$ref": "#/components/schemas/AcmeSslOrganisationProfile"
                     }
                 }
             },
@@ -7033,7 +8141,10 @@
                     "ZONE_ALREADY_EXISTS",
                     "PREMIUM_DNS_ALREADY_ACTIVE",
                     "SUBSCRIPTION_ALREADY_EXISTS",
-                    "HTTPS_REDIRECT_INVALID_CAA"
+                    "HTTPS_REDIRECT_INVALID_CAA",
+                    "INVALID_DOMAIN_NAME",
+                    "ORGANISATION_NOT_FOUND",
+                    "INVALID_SUBSCRIPTION_STATUS"
                 ]
             },
             "Nameserver": {
@@ -7657,6 +8768,32 @@
                 },
                 "description": "The input data to order the renewal of a Premium DNS subscription."
             },
+            "UpdateAcmeSslDomains": {
+                "type": "object",
+                "properties": {
+                    "domainNames": {
+                        "maxItems": 200,
+                        "type": "array",
+                        "description": "The complete list of domain names of the subscription post-upgrade.<br/><b>Note:</b> The \"www\" sub-domain is included for free (e.g., domain.com also covers www.domain.com)",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "wildcards": {
+                        "maxItems": 200,
+                        "type": "array",
+                        "description": "The complete list of wildcard domain names of the subscription post-upgrade.<br/><b>Note:</b> The base domain is included with each wildcard for free (e.g., *.domain.com also covers domain.com)",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "organisationProfileId": {
+                        "type": "integer",
+                        "description": "The id of an existing organisation profile already linked to the subscription to attach to the added domain names or wildcards.<br/><b>Only provide the organisation profile id for `ORGANISATION` subscriptions.</b>",
+                        "format": "int32"
+                    }
+                }
+            },
             "EmailPassword": {
                 "type": "object",
                 "properties": {
@@ -7810,6 +8947,25 @@
                     "EXACTLY"
                 ]
             },
+            "OrganisationProfileStatus": {
+                "type": "string",
+                "description": "Current validation status of this organisation profile (e.g. pending, validated, rejected).",
+                "enum": [
+                    "CANCELLED",
+                    "DELETED",
+                    "NOT_VALIDATED",
+                    "PENDING_VALIDATION",
+                    "TO_CANCEL",
+                    "VALIDATED",
+                    "VALIDATION_ERROR",
+                    "EXPIRED",
+                    "REJECTED",
+                    "PENDING_DELETE",
+                    "PENDING_REVOCATION",
+                    "REVOKED",
+                    "REVOCATION_ERROR"
+                ]
+            },
             "DnsZoneDnssecAlgorithm": {
                 "type": "object",
                 "properties": {
@@ -7820,6 +8976,24 @@
                         "type": "string"
                     }
                 }
+            },
+            "RenewAcmeSslSubscription": {
+                "type": "object",
+                "properties": {
+                    "durationUnit": {
+                        "type": "string",
+                        "description": "The time unit the product will last for",
+                        "default": "YEAR",
+                        "enum": [
+                            "YEAR"
+                        ]
+                    },
+                    "duration": {
+                        "type": "number",
+                        "description": "The renewal duration in years. Allowed values: 1.0, 2.0, 3.0."
+                    }
+                },
+                "description": "The input data to order the renewal of an ACME SSL subscription."
             },
             "PremiumDnsSubscription": {
                 "type": "object",
@@ -8082,6 +9256,24 @@
                     "EDITED_INVOICE"
                 ]
             },
+            "UpgradeAcmeSslSubscriptionQuantity": {
+                "type": "object",
+                "properties": {
+                    "additionalDomainNameQuantity": {
+                        "type": "integer",
+                        "description": "The quantity of domain names to add to the existing subscription.",
+                        "format": "int32",
+                        "default": 0
+                    },
+                    "additionalWildcardQuantity": {
+                        "type": "integer",
+                        "description": "The quantity of wildcards to add to the existing subscription.",
+                        "format": "int32",
+                        "default": 0
+                    }
+                },
+                "description": "The input data to upgrade the number of allowed domain names or wildcards of an ACME SSL subscription. <br/>At least one of the quantity field must be provided and be positive. <br/>The number of domain names or wildcards cannot exceed 200."
+            },
             "ContactValidationDetails": {
                 "type": "object",
                 "properties": {
@@ -8291,6 +9483,7 @@
                     "DIG_QUERY_FAILED",
                     "MISSING_TOKEN",
                     "CIP_ASSOCIATION_DELETION_FAILED",
+                    "JETPACK_ALREADY_ACTIVE",
                     "SSL_VERIFICATION_EMAIL_ADDRESS_REQUIRED",
                     "PRODUCT_CODE_INVALID",
                     "INVALID_AUTO_SSL_DOMAIN_STATUS",
@@ -8298,11 +9491,13 @@
                     "REGISTRAR_ACCOUNT_COST_ALREADY_EXIST",
                     "MDC_PRODUCT_CONFIGURATION_REQUIRED",
                     "REGISTRAR_ACCOUNT_COST_FORBIDDEN_TYPE",
+                    "PEPPOL_DOCUMENT_REJECTED",
                     "AUTO_SSL_UPDATE_FAILED",
                     "PHONE_NUMBER_REQUIRED",
                     "INVALID_GOOD_STATUS",
                     "INVALID_NAMESERVER_LIST",
                     "INVALID_CSR_COUNTRY_CODE",
+                    "E_INVOICING_ID_NOT_VALID",
                     "CONTACT_PROFILE_BULK_UPDATE_FAILED",
                     "ORDERGOOD_ID_REQUIRED",
                     "PROVIDER_URL_FORWARD_IP_NOT_FOUND",
@@ -8310,8 +9505,10 @@
                     "DOMAIN_INTERNAL_TRANSFER_ALREADY_ACCEPTED",
                     "DOMAIN_EXISTS",
                     "AUTO_SSL_ORGANISATION_UPDATE_FAILED",
+                    "E_INVOICING_FEATURE_NOT_ALLOWED",
                     "ORDER_NOT_REIMBURSABLE",
                     "PHONE_VALIDATION_REQUESTED_RECENTLY",
+                    "E_INVOICE_NEVER_PUBLISHED",
                     "USER_NOT_ACTIVE",
                     "ACCOUNT_PENDING_DELETE",
                     "INVALID_CSR_COMMON_NAME_FQDN",
@@ -8333,6 +9530,7 @@
                     "INVALID_ORDER_DOMAIN_CONFIGURATION",
                     "PDF_FETCH_FAILED",
                     "INVALID_ORDER_GOOD",
+                    "E_INVOICING_NOT_ENABLED",
                     "ORDER_AUTO_SSL_OPERATION_NOT_FOUND",
                     "TRANSFER_OUT_INVALID_AUTHORIZATION_TYPE",
                     "INVALID_CSR_COMMON_NAME_IS_IP_ADDRESS",
@@ -8345,6 +9543,7 @@
                     "GOOD_DELETION_NOT_CANCELLABLE",
                     "ORDER_PAYMENT_TRANSACTIONS_NOT_FOUND",
                     "RENEWAL_UNAVAILABLE",
+                    "PEPPOL_TRANSMISSION_FAILED",
                     "PREMIUM_PRODUCT_PRICE_NOT_FOUND",
                     "INVALID_DNS_RECORD_DATA",
                     "GOOD_NOT_DELETABLE",
@@ -8454,6 +9653,7 @@
                     "IP_LOOKUP_INVALID_HOST",
                     "NO_APPLICABLE_VAT_ERROR",
                     "ALIAS_FORMAT",
+                    "E_INVOICING_NOT_REGISTERED",
                     "PEPPOL_SML_LOOKUP_FAILED",
                     "HTTPS_REDIRECT_ALREADY_PENDING",
                     "ORDER_VAT_VALIDATION_STATUS_REQUIRED",
@@ -8572,6 +9772,7 @@
                     "DNS_ZONE_NOT_VALID",
                     "MULTIPLE_ORDER_INVOICE_NOT_DIRECTLY_REFUNDABLE",
                     "CONFLICTING_DOMAIN_OPERATIONS",
+                    "PEPPOL_DOCUMENT_CONFLICT",
                     "DNS_SOLUTION_NOT_FOUND",
                     "GOOD_NOT_FOUND",
                     "MAIN_USER_CIP_DELETION_FAILED",
@@ -8606,6 +9807,7 @@
                     "FEATURE_NOT_SUPPORTED",
                     "INVALID_TLD_REGISTRAR_ACCOUNT_COSTS_CURRENCY_ID",
                     "EMAIL_VALIDATION_EXPIRED",
+                    "PEPPOL_DOCUMENT_NOT_FOUND",
                     "GOOD_NOT_RENEWABLE",
                     "WRONG_PRODUCT",
                     "ORDERLINES_IDS_LIST_REQUIRED",
@@ -8615,12 +9817,14 @@
                     "UNIFIED_QUOTA_PROPERTY_NOT_FOUND",
                     "PAYMENT_OPERATION_NOT_FOUND",
                     "AUTO_SSL_UPDATE_DOMAIN_FAILED",
+                    "DOMAIN_ID_REQUIRED",
                     "HOSTING_CERTIFICATE_UNAVAILABLE",
                     "GROUPWARE_NOT_FOUND",
                     "X509_CERTIFICATE_ERROR",
                     "INVALID_CONTACT_VALIDATION_DETAILS",
                     "PHONE_VALIDATION_ALREADY_VALIDATED",
                     "ORDERLINE_DURATION_ERROR",
+                    "E_INVOICING_INVALID_STATUS",
                     "COUNTRY_REQUIRED",
                     "SINGLE_PRODUCT_REQUIRED",
                     "DNS_ZONE_DNSKEY_NOT_FOUND",
@@ -8683,6 +9887,7 @@
                     "GOOD_NOT_UPGRADABLE",
                     "VALIDATION_ERROR",
                     "EMAIL_TEMPLATE_REQUIRED",
+                    "VAT_NUMBER_NOT_VALID",
                     "NS_PROFILE_UPDATE_FAILED",
                     "NO_VALID_OPERATION",
                     "INVOICE_NOT_FOUND",
@@ -8729,6 +9934,7 @@
                     "EMPTY_PDF",
                     "REFUND_REQUEST_PENDING",
                     "ORDERGOOD_NOT_FOUND",
+                    "E_INVOICING_NOT_FOUND",
                     "FEATURE_PARAMETER_NOT_FOUND",
                     "INVALID_DELIVERY_DATE",
                     "DOMAIN_ALREADY_VALIDATED",
@@ -8745,6 +9951,7 @@
                     "DYN_DNS_TOO_MANY_DOMAINS",
                     "DNS_ZONE_PARKING_ERROR",
                     "PROCESS_ALREADY_INITIATED",
+                    "NO_VALID_COMPANY_ID_NUMBER_FOUND",
                     "PREMIUM_DNS_DOMAIN_IN_CART",
                     "OX_ENDPOINT_NOT_FOUND",
                     "INVOICE_AMOUNT_REQUIRED",
@@ -8766,6 +9973,7 @@
                     "DEFAULT_CONTACT_ALREADY_EXISTS",
                     "HTTPS_REDIRECT_INVALID_QUANTITY",
                     "INVALID_RENEWAL_MODE",
+                    "E_INVOICE_ALREADY_PUBLISHED",
                     "CERTIFICATE_DELETED",
                     "SAN_NOT_FOUND",
                     "PAYMENT_PROVIDER_ERROR",
@@ -8801,6 +10009,7 @@
                     "NO_OPEN_CHECKOUT_FOUND",
                     "DNS_ZONE_LOCKED_RECORD",
                     "INVALID_DNSSEC_STATUS",
+                    "INVALID_PARAMETERS",
                     "DNS_ZONE_PENDING_DNSSEC_ACTION",
                     "DOMAIN_INTERNAL_TRANSFER_CREATION_FAILED",
                     "ORDER_STATUS_REQUIRED",
@@ -8816,6 +10025,7 @@
                     "NOT_PAYABLE_INVOICE_STATUS",
                     "ACCOUNT_ALREADY_DEACTIVATED",
                     "PAYMENT_TRANSACTION_NOT_FOUND",
+                    "E_INVOICING_DOCUMENT_ID_REQUIRED",
                     "PREMIUM_DNS_INVALID_QUANTITY",
                     "DEFAULT_CIP_REQUIRED",
                     "LOGIN_NOT_FOUND",

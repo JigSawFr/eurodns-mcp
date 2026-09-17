@@ -42,6 +42,9 @@ const BILLING_OPERATION_IDS = new Set([
   'createHttpsRedirectSubscription',
   'renewHttpsRedirectSubscription',
   'updateSubscriptionAutorenewSettings',
+  'createAcmeSslSubscription',
+  'renewAcmeSslSubscription',
+  'upgradeAcmeSslSubscriptionQuantity',
 ]);
 
 const DESTRUCTIVE_OPERATION_IDS = new Set([
@@ -53,7 +56,24 @@ const DESTRUCTIVE_OPERATION_IDS = new Set([
   'revokeSslCertificate',
   'cancelSslCertificate',
   'cancelSslSan',
+  'deleteAcmeSslSubscription',
+  'deactivateAcmeSslAccount',
 ]);
+
+/**
+ * Operation ids the document gets wrong, keyed by `METHOD path`.
+ *
+ * The vendor reuses `getSslSubscriptions` for `GET /ssl-subscriptions` and for
+ * `GET /acme-ssl-subscriptions`. Every layer above this file — the tool names, the curated
+ * descriptions, the composites' member lookup — is keyed by operation id, so a duplicate is
+ * not two tools with one name but one tool silently swapped for another: the subscription
+ * composite resolved its SSL listing to the ACME one and refused to build. The document is
+ * vendored as published (the drift check compares it byte for byte), so the correction lives
+ * here. An entry whose path the document no longer has fails the run rather than lingering.
+ */
+const OPERATION_ID_OVERRIDES: Record<string, string> = {
+  'GET /acme-ssl-subscriptions': 'getAcmeSslSubscriptions',
+};
 
 // The OpenAPI document is untyped JSON walked structurally; `any` is the honest type here.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -226,6 +246,8 @@ function emitOperationsModule(): { source: string; count: number; tags: Set<stri
   refPrefix = 'S.';
   const entries: string[] = [];
   const tags = new Set<string>();
+  const ids: string[] = [];
+  const overridden = new Set<string>();
   let count = 0;
 
   for (const [path, item] of Object.entries<Json>(spec.paths ?? {})) {
@@ -235,9 +257,13 @@ function emitOperationsModule(): { source: string; count: number; tags: Set<stri
       const operation: Json | undefined = item[method];
       if (!operation) continue;
 
-      const operationId: string = operation.operationId ?? `${method}_${path}`;
+      const route = `${method.toUpperCase()} ${path}`;
+      const operationId: string =
+        OPERATION_ID_OVERRIDES[route] ?? operation.operationId ?? `${method}_${path}`;
+      if (route in OPERATION_ID_OVERRIDES) overridden.add(route);
       const tag: string = operation.tags?.[0] ?? 'Default';
       tags.add(tag);
+      ids.push(operationId);
       count += 1;
 
       const params: ParameterSpec[] = [
@@ -281,6 +307,23 @@ function emitOperationsModule(): { source: string; count: number; tags: Set<stri
         ].join('\n'),
       );
     }
+  }
+
+  // Both checks fail the generator rather than the build after it: a duplicate id would
+  // otherwise reach `composites.ts`, which resolves members by id and would build the wrong
+  // tool, and a stale override would keep correcting a document that no longer needs it.
+  const duplicates = ids.filter((id, index) => ids.indexOf(id) !== index);
+  if (duplicates.length > 0) {
+    throw new Error(
+      `the document reuses an operation id: ${[...new Set(duplicates)].join(', ')}. ` +
+        'Give each route its own id in OPERATION_ID_OVERRIDES.',
+    );
+  }
+  const stale = Object.keys(OPERATION_ID_OVERRIDES).filter((route) => !overridden.has(route));
+  if (stale.length > 0) {
+    throw new Error(
+      `OPERATION_ID_OVERRIDES names a route the document no longer has: ${stale.join(', ')}`,
+    );
   }
 
   const source =
